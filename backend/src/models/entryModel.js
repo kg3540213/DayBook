@@ -11,7 +11,8 @@ const entrySchema = new mongoose.Schema(
     title: String,
     mood: {
       type: String,
-      enum: ["🙂", "😔", "😡"],
+      // Added 😐 as 4th mood option for neutral sentiment
+      enum: ["🙂", "😔", "😡", "😐"],
     },
     content: String,
   },

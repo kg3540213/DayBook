@@ -8,7 +8,8 @@ import Password from "../auth/Password";
 import Logout from "../auth/Logout";
 
 const NavProfile = () => {
-  const user = useSelector((state) => state.user);
+  // Bug fix: was state.user (whole slice), now correctly reads state.user.data
+  const user = useSelector((state) => state.user.data);
   const [openProfile, setOpenProfile] = useState(false);
   const [openPassword, setOpenPassword] = useState(false);
   const [openLogout, setOpenLogout] = useState(false);

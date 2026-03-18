@@ -44,6 +44,21 @@ const entriesApiSlice = apiSlice.injectEndpoints({
         params: { text: data },
       }),
     }),
+
+    // NEW: Send content to backend → Gemini → returns detected mood emoji
+    analyzeMood: builder.mutation({
+      query: (content) => ({
+        url: "/entries/analyze",
+        method: "POST",
+        body: { content },
+      }),
+    }),
+
+    // NEW: Fetch mood counts grouped by emoji for the analytics page
+    getMoodAnalytics: builder.query({
+      query: () => "/entries/analytics/mood",
+      providesTags: ["Entries"],
+    }),
   }),
 });
 
@@ -54,4 +69,6 @@ export const {
   useUpdateEntryMutation,
   useDeleteEntryMutation,
   useSearchEntryQuery,
+  useAnalyzeMoodMutation,
+  useGetMoodAnalyticsQuery,
 } = entriesApiSlice;

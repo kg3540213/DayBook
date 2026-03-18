@@ -9,6 +9,7 @@ import Home from "./pages/Home";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Entries from "./pages/Entries";
+import Analytics from "./pages/Analytics";
 import About from "./pages/About";
 import NotFound from "./pages/NotFound";
 
@@ -23,6 +24,7 @@ const App = () => {
             <Route path="login" element={<Login />} />
             <Route path="signup" element={<Signup />} />
             <Route path="entries" element={<Entries />} />
+            <Route path="analytics" element={<Analytics />} />
             <Route path="about" element={<About />} />
             <Route path="*" element={<NotFound />} />
           </Route>

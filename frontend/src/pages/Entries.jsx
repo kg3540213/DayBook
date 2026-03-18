@@ -9,7 +9,7 @@ import AddEntry from "../components/entry/AddEntry";
 import Loader from "../components/Loader";
 
 const Entries = () => {
-  const user = useSelector((state) => state.user);
+  const user = useSelector((state) => state.user.data);
   const [searchParams] = useSearchParams();
   const searchQuery = searchParams.get("search") || "";
 

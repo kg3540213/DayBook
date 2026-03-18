@@ -1,16 +1,23 @@
 import ModalLayout from "../ModalLayout";
 import { useEffect, useState } from "react";
 import { FaPlus } from "react-icons/fa";
-import { useAddEntryMutation } from "../../redux/api/entriesApiSlice";
+import { useAddEntryMutation, useAnalyzeMoodMutation } from "../../redux/api/entriesApiSlice";
 import { encryptText } from "../../utils/crypto.js";
 import { toast } from "react-toastify";
 import { useSelector } from "react-redux";
 
+const MOODS = [
+  { value: "🙂", label: "🙂 Happy" },
+  { value: "😔", label: "😔 Sad" },
+  { value: "😡", label: "😡 Angry" },
+  { value: "😐", label: "😐 Neutral" },
+];
+
 function AddEntry() {
   const [open, setOpen] = useState(false);
   const [addEntry, { isLoading }] = useAddEntryMutation();
-  const { userPassword } = useSelector((state) => state.user);
-  console.log("User Password from Redux:", userPassword);
+  const [analyzeMood, { isLoading: isAnalyzing }] = useAnalyzeMoodMutation();
+  const userPassword = useSelector((state) => state.user.userPassword);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -20,44 +27,54 @@ function AddEntry() {
   });
 
   useEffect(() => {
-    const initialData = {
+    setFormData({
       title: "",
       mood: "🙂",
       content: "",
       date: new Date().toISOString().slice(0, 10),
-    };
-    setFormData(initialData);
+    });
   }, [open]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value,
-    });
+    setFormData({ ...formData, [name]: value });
+  };
+
+  // Calls Gemini via backend and auto-fills the mood select
+  const handleAnalyzeMood = async () => {
+    if (!formData.content.trim()) {
+      toast.warning("Write something first before analyzing mood!");
+      return;
+    }
+    try {
+      const response = await analyzeMood(formData.content).unwrap();
+      setFormData((prev) => ({ ...prev, mood: response.mood }));
+      toast.success(`Mood detected: ${response.mood}`);
+    } catch (error) {
+      toast.error(error?.data?.message || "Mood analysis failed. Try again!");
+    }
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  try {
-    const encryptedContent = encryptText(
-      formData.content,
-      userPassword
-    );
-    console.log("Encrypted Content:", encryptedContent);
+    if (!userPassword) {
+      toast.error("Session expired. Please log out and log in again to save entries.");
+      return;
+    }
 
-    const response = await addEntry({
-      ...formData,
-      content: encryptedContent,
-    }).unwrap();
-
-    setOpen(false);
-    toast.success(response.message);
-  } catch (error) {
-    toast.error(error.data?.message || "An error occurred");
-  }
-};
+    try {
+      const encryptedContent = encryptText(formData.content, userPassword);
+      const response = await addEntry({
+        ...formData,
+        content: encryptedContent,
+      }).unwrap();
+      setOpen(false);
+      toast.success(response.message);
+    } catch (error) {
+      toast.error(error.data?.message || "An error occurred");
+    }
+  };
 
   return (
     <>
@@ -87,7 +104,8 @@ function AddEntry() {
                 onChange={handleChange}
                 className="input w-full rounded-lg my-3"
                 required
-                placeholder="Give your entry a title" />
+                placeholder="Give your entry a title"
+              />
             </div>
 
             <div className="flex gap-5 justify-center items-center">
@@ -101,14 +119,14 @@ function AddEntry() {
                   id="date"
                   value={formData.date}
                   onChange={handleChange}
-                  className="input rounded-lg my-3" />
+                  className="input rounded-lg my-3"
+                />
               </div>
 
               <div>
                 <label htmlFor="mood">
                   Your Mood <span className="text-red-500">*</span>
                 </label>
-
                 <select
                   name="mood"
                   id="mood"
@@ -116,17 +134,30 @@ function AddEntry() {
                   onChange={handleChange}
                   className="select rounded-lg my-3"
                 >
-                  <option value="🙂">🙂 Happy</option>
-                  <option value="😔">😔 Sad</option>
-                  <option value="😡">😡 Angry</option>
+                  {MOODS.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
 
             <div>
-              <label htmlFor="content">
-                Describe Your Day <span className="text-red-500">*</span>
-              </label>
+              <div className="flex justify-between items-center">
+                <label htmlFor="content">
+                  Describe Your Day <span className="text-red-500">*</span>
+                </label>
+                {/* AI Analyze button — only active when content is not empty */}
+                <button
+                  type="button"
+                  onClick={handleAnalyzeMood}
+                  disabled={isAnalyzing || !formData.content.trim()}
+                  className="btn btn-xs btn-outline btn-secondary"
+                >
+                  {isAnalyzing ? "Analyzing..." : "✨ AI Detect Mood"}
+                </button>
+              </div>
               <textarea
                 name="content"
                 id="content"
@@ -134,7 +165,8 @@ function AddEntry() {
                 onChange={handleChange}
                 className="textarea w-full rounded-lg my-3 h-50"
                 required
-                placeholder="Write about your day, thoughts, or experiences" />
+                placeholder="Write about your day, thoughts, or experiences"
+              />
             </div>
 
             <button

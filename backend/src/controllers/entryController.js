@@ -1,5 +1,6 @@
 const Entry = require("../models/entryModel");
 const validator = require("validator");
+const { analyzeMood } = require("../services/geminiService");
 
 const createEntry = async (req, res) => {
   const { date, mood, title, content } = req.body;
@@ -55,10 +56,7 @@ const getEntries = async (req, res) => {
   try {
     const entries = await Entry.find({ createdBy: loggedUser._id })
       .populate("createdBy", "firstName lastName")
-      // replace the createdBy field with the firstName and lastName of the user who created the entry
       .sort({ date: -1 });
-      // sort in des order, so the latest entry will be shown first
-    console.log(entries)
 
     res
       .status(200)
@@ -188,7 +186,7 @@ const searchEntries = async (req, res) => {
   if (queryText.length > 100) {
     return res
       .status(422)
-      .json({ message: "Search string cannot be exceed 100 charactere!" });
+      .json({ message: "Search string cannot exceed 100 characters!" });
   }
 
   try {
@@ -219,6 +217,64 @@ const searchEntries = async (req, res) => {
   }
 };
 
+// NEW: Calls Gemini to detect mood from journal content
+const analyzeEntry = async (req, res) => {
+  const { content } = req.body;
+
+  if (!content || !content.trim()) {
+    return res
+      .status(400)
+      .json({ message: "Content is required for mood analysis!" });
+  }
+
+  if (content.length > 1500) {
+    return res
+      .status(422)
+      .json({ message: "Content length should not be more than 1500 characters!" });
+  }
+
+  try {
+    const mood = await analyzeMood(content);
+    res.status(200).json({ message: "Mood analyzed successfully!", mood });
+  } catch (error) {
+    console.error("Error analyzing mood: ", error);
+    res.status(500).json({
+      message: "Mood analysis failed! Please try again later.",
+    });
+  }
+};
+
+// NEW: Returns count of entries grouped by mood for the logged-in user
+const getMoodAnalytics = async (req, res) => {
+  const loggedUser = req.user;
+
+  try {
+    const analytics = await Entry.aggregate([
+      { $match: { createdBy: loggedUser._id } },
+      { $group: { _id: "$mood", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+    ]);
+
+    // Normalize into a flat object: { "🙂": 5, "😔": 2, ... }
+    const moodMap = { "🙂": 0, "😔": 0, "😡": 0, "😐": 0 };
+    analytics.forEach(({ _id, count }) => {
+      if (_id && moodMap[_id] !== undefined) {
+        moodMap[_id] = count;
+      }
+    });
+
+    res.status(200).json({
+      message: "Mood analytics fetched successfully!",
+      data: moodMap,
+    });
+  } catch (error) {
+    console.error("Error fetching mood analytics: ", error);
+    res.status(500).json({
+      message: "Something went wrong! Please try again later!",
+    });
+  }
+};
+
 module.exports = {
   createEntry,
   getEntries,
@@ -226,4 +282,6 @@ module.exports = {
   updateEntry,
   deleteEntry,
   searchEntries,
+  analyzeEntry,
+  getMoodAnalytics,
 };

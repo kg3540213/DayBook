@@ -1,6 +1,8 @@
 import ReadMore from "./ReadMore";
 import EditEntry from "./EditEntry";
 import DeleteEntry from "./DeleteEntry";
+import { useSelector } from "react-redux";
+import { decryptText } from "../../utils/crypto.js";
 
 const EntryCard = ({
   id,
@@ -11,6 +13,19 @@ const EntryCard = ({
   updatedAt,
   highlightText,
 }) => {
+  // Bug fix: decrypt content before display
+  const userPassword = useSelector((state) => state.user.userPassword);
+  console.log(userPassword)
+  let decryptedContent = content;
+  if (userPassword && content) {
+    try {
+      const result = decryptText(content, userPassword);
+      decryptedContent = result || content;
+    } catch {
+      // fall back to raw if decryption fails (e.g. old unencrypted entries)
+    }
+  }
+
   const formattedDate = new Date(date).toLocaleDateString("default", {
     day: "numeric",
     month: "long",
@@ -24,7 +39,9 @@ const EntryCard = ({
   });
 
   const contentLimit =
-    content.length > 300 ? `${content.slice(0, 300)}...` : content;
+    decryptedContent.length > 300
+      ? `${decryptedContent.slice(0, 300)}...`
+      : decryptedContent;
 
   const highlightMatch = (text) => {
     if (!highlightText) return text;
@@ -64,7 +81,7 @@ const EntryCard = ({
             formattedDate={formattedDate}
             title={title}
             mood={mood}
-            content={content}
+            content={decryptedContent}
             formattedUpdateAt={formattedUpdateAt}
           />
         </div>

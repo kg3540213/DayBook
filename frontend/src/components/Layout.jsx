@@ -20,6 +20,8 @@ const Layout = () => {
   useEffect(() => {
     if (!isLoading) {
       if (profile) {
+        // profile is the raw API response e.g. { message, data: { email, firstName, lastName } }
+        // We wrap it to match the shape stored by login/signup: { data: { ... } }
         dispatch(userInfo(profile));
       } else if (isError) {
         dispatch(removeUserInfo());

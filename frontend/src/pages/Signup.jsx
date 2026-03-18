@@ -6,18 +6,18 @@ import { useDispatch, useSelector } from "react-redux";
 import { userInfo } from "../redux/features/userSlice";
 
 const Signup = () => {
-  const user = useSelector((state) => state.user);
+  const user = useSelector((state) => state.user.data);
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const [signup, { isLoading }] = useSignupMutation();
-
+ 
   const [formData, setFormData] = useState({
     firstName: "",
     lastName: "",
     email: "",
     password: "",
   });
-
+  
   if (user) {
     return <Navigate to="/" replace />;
   }
@@ -34,6 +34,7 @@ const Signup = () => {
     e.preventDefault();
     try {
       const response = await signup(formData).unwrap();
+      console.log("Signup Response:", response);
       dispatch(userInfo(response));
       navigate("/", replace);
       toast.success(

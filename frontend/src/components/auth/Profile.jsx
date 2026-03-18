@@ -4,7 +4,7 @@ import { useUpdateProfileMutation } from "../../redux/api/usersApiSlice";
 import { toast } from "react-toastify";
 
 const Profile = ({ close }) => {
-  const user = useSelector((state) => state.user);
+  const user = useSelector((state) => state.user.data);
 
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");

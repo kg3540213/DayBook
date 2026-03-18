@@ -6,14 +6,15 @@ import { userInfo, setUserPassword } from "../redux/features/userSlice";
 import { toast } from "react-toastify";
 
 const Login = () => {
-  const { userInfo } = useSelector((state) => state.user);
+  // Bug fix: was `const { userInfo } = useSelector(...)` which shadowed the imported action
+  const user = useSelector((state) => state.user.data);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [login, { isLoading }] = useLoginMutation();
 
-  if (userInfo) {
+  if (user) {
     return <Navigate to="/" replace />;
   }
 
