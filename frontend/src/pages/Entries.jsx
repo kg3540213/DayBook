@@ -9,23 +9,23 @@ import AddEntry from "../components/entry/AddEntry";
 import Loader from "../components/Loader";
 
 const Entries = () => {
-  const user = useSelector((state) => state.user);
+  const { userInfo } = useSelector((state) => state.user);
   const [searchParams] = useSearchParams();
   const searchQuery = searchParams.get("search") || "";
 
-  if (!user) {
-    return <Navigate to="/login" replace />;
-  }
-
   const { data: getEntries, isLoading: isLoadingEntries } = useGetEntriesQuery(
     undefined,
-    { skip: searchQuery.length > 0 }
+    { skip: searchQuery.length > 0 || !userInfo }
   );
 
   const { data: searchResult, isLoading: isLoadingSearch } =
     useSearchEntryQuery(searchQuery, {
-      skip: searchQuery.length === 0,
+      skip: searchQuery.length === 0 || !userInfo,
     });
+
+  if (!userInfo) {
+    return <Navigate to="/login" replace />;
+  }
 
   if (isLoadingEntries || isLoadingSearch) {
     return (
@@ -34,8 +34,8 @@ const Entries = () => {
       </div>
     );
   }
-  
-const entries =
+
+  const entries =
     searchQuery.length > 0 ? searchResult?.data || [] : getEntries?.data || [];
 
   if (entries.length === 0) {
@@ -43,7 +43,7 @@ const entries =
       return (
         <div className="text-center mt-10 mx-7 min-h-[calc(100dvh-64px-52px-40px)]">
           <p className="text-2xl font-semibold mb-2">
-            Sorry {user.data.firstName}, I couldn't find any entries matching
+            Sorry {userInfo.data?.firstName}, I couldn't find any entries matching
             your search query!
           </p>
           <p className="text-lg">
@@ -59,7 +59,7 @@ const entries =
       return (
         <div className="text-center mt-10 mx-7 min-h-[calc(100dvh-64px-52px-40px)]">
           <p className="text-2xl font-semibold mb-2">
-            Welcome, {user.data.firstName}
+            Welcome, {userInfo.data?.firstName}
           </p>
           <p className="text-lg mb-2">
             It looks like you haven't added any entries yet.

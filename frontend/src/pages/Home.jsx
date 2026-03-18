@@ -2,16 +2,16 @@ import { Link } from "react-router-dom";
 import { useSelector } from "react-redux";
 
 const Home = () => {
-  const user = useSelector((state) => state.user);
+  const { userInfo } = useSelector((state) => state.user);
 
   return (
     <div>
       <div className="flex justify-center items-center min-h-[calc(100svh-64px-40px)] relative">
         <div className="text-center py-10 max-w-3xl mx-4">
-          {user ? (
+          {userInfo ? (
             <>
               <h1 className="text-3xl xl:text-5xl font-bold text-primary">
-                Welcome Back, {user.data?.firstName}
+                Welcome Back, {userInfo.data?.firstName}
               </h1>
               <p className="text-lg mt-4">
                 Hey! Great to have you back 😊 Your entries are safe, private,

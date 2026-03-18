@@ -8,7 +8,7 @@ import Password from "../auth/Password";
 import Logout from "../auth/Logout";
 
 const NavProfile = () => {
-  const user = useSelector((state) => state.user);
+  const { userInfo } = useSelector((state) => state.user);
   const [openProfile, setOpenProfile] = useState(false);
   const [openPassword, setOpenPassword] = useState(false);
   const [openLogout, setOpenLogout] = useState(false);
@@ -22,10 +22,10 @@ const NavProfile = () => {
 
   return (
     <>
-      {user ? (
+      {userInfo ? (
         <div className="dropdown dropdown-end">
           <div tabIndex={0} role="button" className="btn btn-primary">
-            {user.data?.firstName}
+            {userInfo.data?.firstName}
             <FaChevronDown />
           </div>
           <ul className="menu dropdown-content bg-base-200 rounded-box z-1 mt-3 w-52 p-2 shadow">

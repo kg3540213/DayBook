@@ -4,19 +4,19 @@ import { useUpdateProfileMutation } from "../../redux/api/usersApiSlice";
 import { toast } from "react-toastify";
 
 const Profile = ({ close }) => {
-  const user = useSelector((state) => state.user);
+  const { userInfo } = useSelector((state) => state.user);
 
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
 
   useEffect(() => {
-    if (user) {
-      setEmail(user?.data?.email);
-      setFirstName(user?.data?.firstName);
-      setLastName(user?.data?.lastName);
+    if (userInfo) {
+      setEmail(userInfo?.data?.email);
+      setFirstName(userInfo?.data?.firstName);
+      setLastName(userInfo?.data?.lastName);
     }
-  }, [user, close]);
+  }, [userInfo, close]);
 
   const [updateProfile, { isLoading }] = useUpdateProfileMutation();
   const handleSubmit = async (e) => {

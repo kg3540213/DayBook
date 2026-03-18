@@ -10,7 +10,6 @@ function AddEntry() {
   const [open, setOpen] = useState(false);
   const [addEntry, { isLoading }] = useAddEntryMutation();
   const { userPassword } = useSelector((state) => state.user);
-  console.log("User Password from Redux:", userPassword);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -38,26 +37,27 @@ function AddEntry() {
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  try {
-    const encryptedContent = encryptText(
-      formData.content,
-      userPassword
-    );
-    console.log("Encrypted Content:", encryptedContent);
+    try {
+      let contentToSave = formData.content;
+      
+      // Only encrypt if userPassword is available
+      if (userPassword) {
+        contentToSave = encryptText(formData.content, userPassword);
+      }
 
-    const response = await addEntry({
-      ...formData,
-      content: encryptedContent,
-    }).unwrap();
+      const response = await addEntry({
+        ...formData,
+        content: contentToSave,
+      }).unwrap();
 
-    setOpen(false);
-    toast.success(response.message);
-  } catch (error) {
-    toast.error(error.data?.message || "An error occurred");
-  }
-};
+      setOpen(false);
+      toast.success(response.message);
+    } catch (error) {
+      toast.error(error?.data?.message || error?.message || "An error occurred");
+    }
+  };
 
   return (
     <>

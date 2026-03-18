@@ -4,7 +4,7 @@ import { useChangePasswordMutation } from "../../redux/api/usersApiSlice";
 import { toast } from "react-toastify";
 
 const Password = ({ close }) => {
-  const user = useSelector((state) => state.user);
+  const { userInfo } = useSelector((state) => state.user);
 
   const [email, setEmail] = useState("");
   const [firstName, setFirstName] = useState("");
@@ -12,11 +12,11 @@ const Password = ({ close }) => {
   const [newPassword, setNewPassword] = useState("");
 
   useEffect(() => {
-    if (user) {
-      setEmail(user?.data?.email);
-      setFirstName(user?.data?.firstName);
+    if (userInfo) {
+      setEmail(userInfo?.data?.email);
+      setFirstName(userInfo?.data?.firstName);
     }
-  }, [user]);
+  }, [userInfo]);
 
   useEffect(() => {
     setOldPassword("");

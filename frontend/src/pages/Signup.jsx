@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { Link, Navigate, replace, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useSignupMutation } from "../redux/api/usersApiSlice";
 import { toast } from "react-toastify";
 import { useDispatch, useSelector } from "react-redux";
-import { userInfo } from "../redux/features/userSlice";
+import { userInfo as setUserInfo, setUserPassword } from "../redux/features/userSlice";
 
 const Signup = () => {
-  const user = useSelector((state) => state.user);
+  const { userInfo } = useSelector((state) => state.user);
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const [signup, { isLoading }] = useSignupMutation();
@@ -18,7 +18,7 @@ const Signup = () => {
     password: "",
   });
 
-  if (user) {
+  if (userInfo) {
     return <Navigate to="/" replace />;
   }
 
@@ -30,12 +30,12 @@ const Signup = () => {
   };
 
   const handleSubmit = async (e) => {
-    
     e.preventDefault();
     try {
       const response = await signup(formData).unwrap();
-      dispatch(userInfo(response));
-      navigate("/", replace);
+      dispatch(setUserInfo(response));
+      dispatch(setUserPassword(formData.password));
+      navigate("/", { replace: true });
       toast.success(
         `${response.data.firstName}, your account is created and you're logged in!`
       );

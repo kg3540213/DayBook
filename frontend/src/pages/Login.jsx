@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Link, Navigate, replace, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useLoginMutation } from "../redux/api/usersApiSlice";
 import { useDispatch, useSelector } from "react-redux";
-import { userInfo, setUserPassword } from "../redux/features/userSlice";
+import { userInfo as setUserInfo, setUserPassword } from "../redux/features/userSlice";
 import { toast } from "react-toastify";
 
 const Login = () => {
@@ -21,9 +21,9 @@ const Login = () => {
     e.preventDefault();
     try {
       const response = await login({ email, password }).unwrap();
-      dispatch(userInfo(response));
+      dispatch(setUserInfo(response));
       dispatch(setUserPassword(password));
-      navigate("/", replace);
+      navigate("/", { replace: true });
       toast.success(`Welcome back, ${response.data.firstName}`);
     } catch (error) {
       toast.error(error?.data?.message || "An unexpected error occurred!");
