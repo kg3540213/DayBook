@@ -6,9 +6,12 @@ import {
   useUpdateEntryMutation,
 } from "../../redux/api/entriesApiSlice";
 import { toast } from "react-toastify";
+import { useSelector } from "react-redux";
+import { encryptText, decryptText } from "../../utils/crypto.js";
 
 const EditEntry = ({ id }) => {
   const [open, setOpen] = useState(false);
+  const { userPassword } = useSelector((state) => state.user);
   const { data: getEntry, isLoading: entryLoading } = useGetEntryQuery(id, {
     skip: !open,
   });
@@ -32,24 +35,70 @@ const EditEntry = ({ id }) => {
   };
 
   useEffect(() => {
-    if (getEntry) {
-      setFormData({
-        title: getEntry.data?.title || "",
-        mood: getEntry.data?.mood || "",
-        content: getEntry.data?.content || "",
-        date: new Date(getEntry.data?.date).toISOString().slice(0, 10) || "",
-      });
+    if (getEntry && userPassword) {
+      try {
+        // Decrypt title and content for editing
+        const decryptedTitle = decryptText(
+          getEntry.data?.title || "",
+          userPassword
+        );
+        const decryptedContent = decryptText(
+          getEntry.data?.content || "",
+          userPassword
+        );
+
+        setFormData({
+          title: decryptedTitle,
+          mood: getEntry.data?.mood || "",
+          content: decryptedContent,
+          date: new Date(getEntry.data?.date).toISOString().slice(0, 10) || "",
+        });
+      } catch {
+        // Fallback for unencrypted entries (legacy data)
+        setFormData({
+          title: getEntry.data?.title || "",
+          mood: getEntry.data?.mood || "",
+          content: getEntry.data?.content || "",
+          date: new Date(getEntry.data?.date).toISOString().slice(0, 10) || "",
+        });
+      }
     }
-  }, [getEntry]);
+  }, [getEntry, userPassword]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      const response = await updateEntry({ id, data: formData }).unwrap();
+      if (!userPassword) {
+        toast.error("Session expired. Please log in again.");
+        return;
+      }
+
+      // Encrypt title and content before saving
+      const encryptedTitle = encryptText(formData.title, userPassword);
+      const encryptedContent = encryptText(formData.content, userPassword);
+
+      // Extract keywords for searchable index
+      const searchableKeywords = formData.title
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((word) => word.length > 2)
+        .join(" ");
+
+      const response = await updateEntry({
+        id,
+        data: {
+          ...formData,
+          title: encryptedTitle,
+          content: encryptedContent,
+          searchableKeywords,
+          // Send plain content for AI mood analysis
+          plainContent: formData.content,
+        },
+      }).unwrap();
       setOpen(false);
       toast.success(response.message);
     } catch (error) {
-      toast.error(error.data.message);
+      toast.error(error.data?.message || "An error occurred");
     }
   };
 

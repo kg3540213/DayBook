@@ -14,9 +14,27 @@ const entrySchema = new mongoose.Schema(
       enum: ["🙂", "😔", "😡"],
     },
     content: String,
+    // AI-detected mood from journal content analysis
+    aiMood: {
+      type: String,
+      enum: ["happy", "sad", "stressed", "anxious", "calm", "excited", "angry", "neutral", null],
+      default: null,
+    },
+    // Searchable keywords for encrypted content (stored unencrypted for search)
+    searchableKeywords: {
+      type: String,
+      default: "",
+    },
   },
   { timestamps: true }
 );
+
+// Text index for full-text search on searchableKeywords
+entrySchema.index({ searchableKeywords: "text" });
+// Compound index for user queries with date filtering
+entrySchema.index({ createdBy: 1, date: -1 });
+// Index for mood filtering
+entrySchema.index({ createdBy: 1, aiMood: 1 });
 
 const entryModel = mongoose.model("Entry", entrySchema);
 

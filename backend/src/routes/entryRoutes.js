@@ -8,6 +8,7 @@ router.use(authMiddleware);
 router.post("/", entryController.createEntry);
 router.get("/", entryController.getEntries);
 router.get("/search", entryController.searchEntries);
+router.get("/analytics", entryController.getMoodAnalytics);
 router.get("/:id", entryController.getEntry);
 router.patch("/:id", entryController.updateEntry);
 router.delete("/:id", entryController.deleteEntry);

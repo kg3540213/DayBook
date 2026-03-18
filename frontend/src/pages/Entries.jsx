@@ -92,6 +92,7 @@ const entries =
             content={entry.content}
             updatedAt={entry.updatedAt}
             highlightText={searchQuery}
+            aiMood={entry.aiMood}
           />
         ))}
       </div>
