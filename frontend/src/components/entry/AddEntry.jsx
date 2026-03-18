@@ -10,7 +10,6 @@ function AddEntry() {
   const [open, setOpen] = useState(false);
   const [addEntry, { isLoading }] = useAddEntryMutation();
   const { userPassword } = useSelector((state) => state.user);
-  console.log("User Password from Redux:", userPassword);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -38,26 +37,40 @@ function AddEntry() {
   };
 
   const handleSubmit = async (e) => {
-  e.preventDefault();
+    e.preventDefault();
 
-  try {
-    const encryptedContent = encryptText(
-      formData.content,
-      userPassword
-    );
-    console.log("Encrypted Content:", encryptedContent);
+    try {
+      if (!userPassword) {
+        toast.error("Session expired. Please log in again.");
+        return;
+      }
 
-    const response = await addEntry({
-      ...formData,
-      content: encryptedContent,
-    }).unwrap();
+      // Encrypt both title and content for E2E encryption
+      const encryptedTitle = encryptText(formData.title, userPassword);
+      const encryptedContent = encryptText(formData.content, userPassword);
 
-    setOpen(false);
-    toast.success(response.message);
-  } catch (error) {
-    toast.error(error.data?.message || "An error occurred");
-  }
-};
+      // Extract keywords from plain text for searchable index (before encryption)
+      const searchableKeywords = formData.title
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((word) => word.length > 2)
+        .join(" ");
+
+      const response = await addEntry({
+        ...formData,
+        title: encryptedTitle,
+        content: encryptedContent,
+        searchableKeywords,
+        // Send plain content for AI mood analysis (server-side)
+        plainContent: formData.content,
+      }).unwrap();
+
+      setOpen(false);
+      toast.success(response.message);
+    } catch (error) {
+      toast.error(error.data?.message || "An error occurred");
+    }
+  };
 
   return (
     <>
