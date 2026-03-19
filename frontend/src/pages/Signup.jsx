@@ -12,6 +12,7 @@ import {
   setUserPassword,
   setPendingEmail,
 } from "../redux/features/userSlice";
+import { savePasswordToSession } from "../utils/sessionPassword";
 
 // ── OTP input — 6 individual digit boxes ─────────────────────────
 const OtpInput = ({ otp, setOtp }) => {
@@ -145,6 +146,8 @@ const Signup = () => {
       // OTP verified — dispatch user + password, clear pending email
       dispatch(userInfo(response));
       dispatch(setUserPassword(passwordForEncryption));
+      // Persist password to sessionStorage so it survives page refresh
+      savePasswordToSession(passwordForEncryption);
       dispatch(setPendingEmail(null));
 
       navigate("/");

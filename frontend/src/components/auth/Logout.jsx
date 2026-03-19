@@ -1,6 +1,7 @@
 import { useLogoutMutation } from "../../redux/api/usersApiSlice";
 import { useDispatch } from "react-redux";
 import { removeUserInfo } from "../../redux/features/userSlice";
+import { clearPasswordFromSession } from "../../utils/sessionPassword";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 
@@ -12,7 +13,13 @@ const Logout = ({ close }) => {
   const handleLogout = async () => {
     try {
       const response = await logout().unwrap();
+
+      // Clear Redux state
       dispatch(removeUserInfo());
+
+      // Clear persisted password from sessionStorage
+      clearPasswordFromSession();
+
       navigate("/");
       close();
       toast.success(response.message);

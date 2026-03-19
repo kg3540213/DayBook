@@ -1,12 +1,12 @@
 import { useState } from "react";
-import { Link, Navigate, replace, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate } from "react-router-dom";
 import { useLoginMutation } from "../redux/api/usersApiSlice";
 import { useDispatch, useSelector } from "react-redux";
 import { userInfo, setUserPassword } from "../redux/features/userSlice";
+import { savePasswordToSession } from "../utils/sessionPassword";
 import { toast } from "react-toastify";
 
 const Login = () => {
-  // Bug fix: was `const { userInfo } = useSelector(...)` which shadowed the imported action
   const user = useSelector((state) => state.user.data);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -14,17 +14,21 @@ const Login = () => {
   const navigate = useNavigate();
   const [login, { isLoading }] = useLoginMutation();
 
-  if (user) {
-    return <Navigate to="/" replace />;
-  }
+  if (user) return <Navigate to="/" replace />;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       const response = await login({ email, password }).unwrap();
+
+      // Dispatch user info to Redux
       dispatch(userInfo(response));
       dispatch(setUserPassword(password));
-      navigate("/", replace);
+
+      // Persist password to sessionStorage so it survives page refresh
+      savePasswordToSession(password);
+
+      navigate("/");
       toast.success(`Welcome back, ${response.data.firstName}`);
     } catch (error) {
       toast.error(error?.data?.message || "An unexpected error occurred!");

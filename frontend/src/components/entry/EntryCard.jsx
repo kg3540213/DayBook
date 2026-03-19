@@ -15,7 +15,7 @@ const EntryCard = ({
 }) => {
   // Bug fix: decrypt content before display
   const userPassword = useSelector((state) => state.user.userPassword);
-  console.log(userPassword)
+
   let decryptedContent = content;
   if (userPassword && content) {
     try {

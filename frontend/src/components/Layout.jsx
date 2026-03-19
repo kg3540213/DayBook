@@ -4,7 +4,8 @@ import Footer from "./Footer";
 import { useEffect, useState } from "react";
 import { useProfileQuery } from "../redux/api/usersApiSlice";
 import { useDispatch } from "react-redux";
-import { removeUserInfo, userInfo } from "../redux/features/userSlice";
+import { removeUserInfo, userInfo, setUserPassword } from "../redux/features/userSlice";
+import { getPasswordFromSession } from "../utils/sessionPassword";
 import Loader from "./Loader";
 import NavLinks from "./navbar/NavLinks";
 import SearchBox from "./navbar/SearchBox";
@@ -20,9 +21,15 @@ const Layout = () => {
   useEffect(() => {
     if (!isLoading) {
       if (profile) {
-        // profile is the raw API response e.g. { message, data: { email, firstName, lastName } }
-        // We wrap it to match the shape stored by login/signup: { data: { ... } }
+        // Rehydrate user info from the profile API response
         dispatch(userInfo(profile));
+
+        // Also restore the password from sessionStorage so decryption
+        // works after a page refresh without requiring the user to log in again
+        const savedPassword = getPasswordFromSession();
+        if (savedPassword) {
+          dispatch(setUserPassword(savedPassword));
+        }
       } else if (isError) {
         dispatch(removeUserInfo());
       }
