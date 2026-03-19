@@ -2,7 +2,7 @@ const Entry = require("../models/entryModel");
 const validator = require("validator");
 const { analyzeMood } = require("../services/geminiService");
 
-// ─── EXISTING ENDPOINTS ───────────────────────────────────────────
+// ─── EXISTING ENDPOINTS (unchanged) ──────────────────────────────
 
 const createEntry = async (req, res) => {
   const { date, mood, title, content } = req.body;
@@ -112,49 +112,154 @@ const deleteEntry = async (req, res) => {
   }
 };
 
+// ── SEARCH ENTRIES ────────────────────────────────────────────────
+// GET /api/entries/search
+//
+// Query parameters — all optional, but at least one must be supplied
+// ─────────────────────────────────────────────────────────────────
+// text      Keyword search across title (priority) + content.
+//           Case-insensitive regex. Max 100 chars.
+//
+// mood      Exact emoji filter. One of: 🙂 😔 😡 😐
+//
+// dateFrom  Inclusive lower bound, YYYY-MM-DD.
+// dateTo    Inclusive upper bound, YYYY-MM-DD.
+//           dateTo is extended to 23:59:59.999 so the full day is
+//           included. dateFrom must not be after dateTo.
+//
+// page      1-based page index. Defaults to 1.
+// limit     Page size. Defaults to 10. Max 50.
+//
+// Response
+// ────────
+// {
+//   message:    "...",
+//   data:       [ ...entries ],          // same shape as getEntries
+//   pagination: {
+//     total:      <total matching docs>,
+//     page:       <current page>,
+//     limit:      <page size>,
+//     totalPages: <ceil(total / limit)>
+//   }
+// }
+//
+// Index notes
+// ───────────
+// The compound index { createdBy: 1, date: -1, mood: 1 } covers every
+// combination of user + date-range + mood filter.  The regex scan over
+// title/content only runs on the already-narrowed document set.
+// ------------------------------------------------------------------
 const searchEntries = async (req, res) => {
   const loggedUser = req.user;
-  const queryText = req.query.text;
 
-  if (!queryText?.trim())
-    return res.status(400).json({ message: "Search text is required!" });
-  if (queryText.length > 100)
-    return res.status(422).json({ message: "Search string cannot exceed 100 characters!" });
+  // ── 1. Parse query params ────────────────────────────────────────
+  const rawText     = req.query.text     ?? "";
+  const rawMood     = req.query.mood     ?? "";
+  const rawDateFrom = req.query.dateFrom ?? "";
+  const rawDateTo   = req.query.dateTo   ?? "";
 
+  const page  = Math.max(1, parseInt(req.query.page)  || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
+  const skip  = (page - 1) * limit;
+
+  const hasText     = rawText.trim().length > 0;
+  const hasMood     = rawMood.trim().length > 0;
+  const hasDateFrom = rawDateFrom.trim().length > 0;
+  const hasDateTo   = rawDateTo.trim().length > 0;
+
+  // Require at least one filter — bare paginated dump belongs to GET /entries
+  if (!hasText && !hasMood && !hasDateFrom && !hasDateTo) {
+    return res.status(400).json({
+      message: "Provide at least one filter: text, mood, dateFrom, or dateTo.",
+    });
+  }
+
+  // ── 2. Validate each param ───────────────────────────────────────
+  if (hasText && rawText.length > 100) {
+    return res.status(422).json({ message: "Search text cannot exceed 100 characters!" });
+  }
+
+  const VALID_MOODS = ["🙂", "😔", "😡", "😐"];
+  if (hasMood && !VALID_MOODS.includes(rawMood)) {
+    return res.status(422).json({
+      message: `Invalid mood. Must be one of: ${VALID_MOODS.join(", ")}`,
+    });
+  }
+
+  if (hasDateFrom && !validator.isDate(rawDateFrom)) {
+    return res.status(422).json({ message: "dateFrom must be a valid date (YYYY-MM-DD)." });
+  }
+  if (hasDateTo && !validator.isDate(rawDateTo)) {
+    return res.status(422).json({ message: "dateTo must be a valid date (YYYY-MM-DD)." });
+  }
+  if (hasDateFrom && hasDateTo && new Date(rawDateFrom) > new Date(rawDateTo)) {
+    return res.status(422).json({ message: "dateFrom cannot be after dateTo." });
+  }
+
+  // ── 3. Build filter ──────────────────────────────────────────────
+  // Always start with ownership so Mongo hits the compound index.
+  const filter = { createdBy: loggedUser._id };
+
+  if (hasMood) {
+    filter.mood = rawMood;
+  }
+
+  if (hasDateFrom || hasDateTo) {
+    filter.date = {};
+    if (hasDateFrom) {
+      filter.date.$gte = new Date(rawDateFrom);
+    }
+    if (hasDateTo) {
+      // Push dateTo to end-of-day so the whole day is included
+      const end = new Date(rawDateTo);
+      end.setUTCHours(23, 59, 59, 999);
+      filter.date.$lte = end;
+    }
+  }
+
+  if (hasText) {
+    // content is AES-encrypted in the database — regex against ciphertext
+    // will never match a plaintext word like "happy".
+    // Title is stored in plaintext so server-side regex works there.
+    // Content keyword matching is done client-side in Entries.jsx after
+    // decryption, using the same `searchText` value passed as `highlightText`.
+    const escaped  = rawText.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const regex    = new RegExp(escaped, "i");
+    filter.title   = { $regex: regex };
+  }
+
+  // ── 4. Execute count + find in parallel ─────────────────────────
   try {
-    const entries = await Entry.find({
-      $and: [
-        {
-          $or: [
-            { title: { $regex: queryText, $options: "i" } },
-            { content: { $regex: queryText, $options: "i" } },
-          ],
-        },
-        { createdBy: loggedUser._id },
-      ],
-    }).sort({ date: -1 });
+    const [total, entries] = await Promise.all([
+      Entry.countDocuments(filter),
+      Entry.find(filter)
+        .sort({ date: -1 })
+        .skip(skip)
+        .limit(limit),
+    ]);
 
     res.status(200).json({
-      message: entries.length === 0 ? "No entries found!" : "Entries fetched successfully!",
+      message: total === 0 ? "No entries found!" : "Entries fetched successfully!",
       data: entries,
+      pagination: {
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit),
+      },
     });
   } catch (error) {
-    console.error("Error searching the entry!", error);
+    console.error("Error searching entries!", error);
     res.status(500).json({ message: "Something went wrong! Please try again later!" });
   }
 };
 
 // ── ANALYZE ENTRY MOOD (Gemini AI) ───────────────────────────────
-// POST /api/entries/analyze
-// Receives plain-text content, sends to Gemini, returns mood emoji.
-// Content is decrypted on the frontend before being sent here —
-// Gemini receives readable text, not ciphertext.
 const analyzeEntry = async (req, res) => {
   const { content } = req.body;
 
   if (!content || !content.trim())
     return res.status(422).json({ message: "Content is required for mood analysis!" });
-
   if (content.length > 1500)
     return res.status(422).json({ message: "Content length should not be more than 1500 characters!" });
 
@@ -167,23 +272,13 @@ const analyzeEntry = async (req, res) => {
   }
 };
 
-// ─── ANALYTICS ENDPOINTS ─────────────────────────────────────────
+// ─── ANALYTICS ENDPOINTS (unchanged) ─────────────────────────────
 
-// ------------------------------------------------------------------
-// GET /api/entries/analytics/mood
-// Groups all user entries by mood emoji and returns counts.
-// Uses compound index: { createdBy, date, mood }
-//
-// Example response:
-// { data: { analytics: { "🙂": 5, "😔": 2, "😡": 1, "😐": 3 }, total: 11 } }
-// ------------------------------------------------------------------
 const getMoodAnalytics = async (req, res) => {
   const loggedUser = req.user;
   try {
     const moodCounts = await Entry.aggregate([
-      // Stage 1: narrow to this user's docs — hits compound index
       { $match: { createdBy: loggedUser._id } },
-      // Stage 2: group by mood, count each
       { $group: { _id: "$mood", count: { $sum: 1 } } },
     ]);
 
@@ -203,54 +298,25 @@ const getMoodAnalytics = async (req, res) => {
   }
 };
 
-// ------------------------------------------------------------------
-// GET /api/entries/analytics/weekly?weeks=8
-// Returns entry count grouped by ISO week for the last N weeks.
-// Default: last 8 weeks. Max: 52.
-//
-// Pipeline:
-//   $match  → user's docs within the date window
-//   $group  → by { isoWeekYear, isoWeek }, count entries
-//   $sort   → ascending by year + week
-//   $project → shape into { week: "2024-W03", count }
-//
-// Example response:
-// { data: [{ week: "2024-W01", count: 3 }, { week: "2024-W02", count: 5 }, ...] }
-// ------------------------------------------------------------------
 const getEntriesPerWeek = async (req, res) => {
   const loggedUser = req.user;
-
   const weeks = Math.min(parseInt(req.query.weeks) || 8, 52);
   const since = new Date();
   since.setDate(since.getDate() - weeks * 7);
 
   try {
     const result = await Entry.aggregate([
-      // Stage 1: filter to user + date window — uses compound index
-      {
-        $match: {
-          createdBy: loggedUser._id,
-          date: { $gte: since },
-        },
-      },
-      // Stage 2: group by ISO year + ISO week number
+      { $match: { createdBy: loggedUser._id, date: { $gte: since } } },
       {
         $group: {
           _id: {
             isoWeekYear: { $isoWeekYear: "$date" },
-            isoWeek: { $isoWeek: "$date" },
+            isoWeek:     { $isoWeek: "$date" },
           },
           count: { $sum: 1 },
         },
       },
-      // Stage 3: sort chronologically
-      {
-        $sort: {
-          "_id.isoWeekYear": 1,
-          "_id.isoWeek": 1,
-        },
-      },
-      // Stage 4: shape output — "2024-W03" label for Recharts
+      { $sort: { "_id.isoWeekYear": 1, "_id.isoWeek": 1 } },
       {
         $project: {
           _id: 0,
@@ -260,7 +326,7 @@ const getEntriesPerWeek = async (req, res) => {
               "-W",
               {
                 $cond: {
-                  if: { $lt: ["$_id.isoWeek", 10] },
+                  if:   { $lt: ["$_id.isoWeek", 10] },
                   then: { $concat: ["0", { $toString: "$_id.isoWeek" }] },
                   else: { $toString: "$_id.isoWeek" },
                 },
@@ -272,79 +338,37 @@ const getEntriesPerWeek = async (req, res) => {
       },
     ]);
 
-    res.status(200).json({
-      message: "Weekly analytics fetched successfully!",
-      data: result,
-    });
+    res.status(200).json({ message: "Weekly analytics fetched successfully!", data: result });
   } catch (error) {
     console.error("Error fetching weekly analytics: ", error);
     res.status(500).json({ message: "Something went wrong! Please try again later!" });
   }
 };
 
-// ------------------------------------------------------------------
-// GET /api/entries/analytics/monthly?months=6
-// Returns entry count grouped by calendar month for last N months.
-// Default: last 6 months. Max: 24.
-//
-// Pipeline:
-//   $match  → user's docs within the date window
-//   $group  → by { year, month }, count entries
-//   $sort   → ascending by year + month
-//   $project → shape into { month: "Jan 2024", count }
-//
-// Example response:
-// { data: [{ month: "Jan 2024", count: 8 }, { month: "Feb 2024", count: 12 }, ...] }
-// ------------------------------------------------------------------
 const getEntriesPerMonth = async (req, res) => {
   const loggedUser = req.user;
-
   const months = Math.min(parseInt(req.query.months) || 6, 24);
-  const since = new Date();
+  const since  = new Date();
   since.setMonth(since.getMonth() - months);
 
-  // Month name lookup for readable labels
   const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
   try {
     const result = await Entry.aggregate([
-      // Stage 1: filter to user + date window — uses compound index
-      {
-        $match: {
-          createdBy: loggedUser._id,
-          date: { $gte: since },
-        },
-      },
-      // Stage 2: group by calendar year + month
+      { $match: { createdBy: loggedUser._id, date: { $gte: since } } },
       {
         $group: {
-          _id: {
-            year: { $year: "$date" },
-            month: { $month: "$date" },
-          },
+          _id: { year: { $year: "$date" }, month: { $month: "$date" } },
           count: { $sum: 1 },
         },
       },
-      // Stage 3: sort chronologically
-      {
-        $sort: {
-          "_id.year": 1,
-          "_id.month": 1,
-        },
-      },
-      // Stage 4: shape output — "Jan 2024" label for Recharts
+      { $sort: { "_id.year": 1, "_id.month": 1 } },
       {
         $project: {
           _id: 0,
-          // month index is 1-based from MongoDB $month
           month: {
             $concat: [
-              {
-                $arrayElemAt: [
-                  MONTH_NAMES,
-                  { $subtract: ["$_id.month", 1] },
-                ],
-              },
+              { $arrayElemAt: [MONTH_NAMES, { $subtract: ["$_id.month", 1] }] },
               " ",
               { $toString: "$_id.year" },
             ],
@@ -354,53 +378,19 @@ const getEntriesPerMonth = async (req, res) => {
       },
     ]);
 
-    res.status(200).json({
-      message: "Monthly analytics fetched successfully!",
-      data: result,
-    });
+    res.status(200).json({ message: "Monthly analytics fetched successfully!", data: result });
   } catch (error) {
     console.error("Error fetching monthly analytics: ", error);
     res.status(500).json({ message: "Something went wrong! Please try again later!" });
   }
 };
 
-// ------------------------------------------------------------------
-// GET /api/entries/analytics/streak
-// Calculates the current writing streak (consecutive days with entries)
-// and the longest streak ever.
-//
-// Pipeline:
-//   $match   → user's docs
-//   $group   → deduplicate to one doc per calendar date
-//   $sort    → descending by date
-//   $project → normalize to YYYY-MM-DD strings
-//
-// Streak logic (JS, after aggregation):
-//   Walk dates from today backwards.
-//   Increment currentStreak while days are consecutive.
-//   Stop when a gap is found.
-//   Track longestStreak across the full history.
-//
-// Example response:
-// { data: { currentStreak: 5, longestStreak: 14, totalDays: 42 } }
-// ------------------------------------------------------------------
 const getWritingStreak = async (req, res) => {
   const loggedUser = req.user;
-
   try {
-    // Get one document per unique calendar date (UTC) the user wrote
     const result = await Entry.aggregate([
-      // Stage 1: filter to this user
       { $match: { createdBy: loggedUser._id } },
-      // Stage 2: normalize date to midnight UTC so time parts don't matter
-      {
-        $group: {
-          _id: {
-            $dateToString: { format: "%Y-%m-%d", date: "$date" },
-          },
-        },
-      },
-      // Stage 3: sort newest first — makes streak walk straightforward
+      { $group: { _id: { $dateToString: { format: "%Y-%m-%d", date: "$date" } } } },
       { $sort: { _id: -1 } },
     ]);
 
@@ -411,37 +401,21 @@ const getWritingStreak = async (req, res) => {
       });
     }
 
-    // Extract sorted date strings
-    const dates = result.map((r) => r._id); // ["2024-03-15", "2024-03-14", ...]
-
-    // Helper: get YYYY-MM-DD string for any Date object
+    const dates     = result.map((r) => r._id);
     const toDateStr = (d) => d.toISOString().slice(0, 10);
-
-    // Helper: difference in calendar days between two YYYY-MM-DD strings
-    const dayDiff = (a, b) => {
-      const msPerDay = 86400000;
-      return Math.round((new Date(a) - new Date(b)) / msPerDay);
-    };
-
-    const today = toDateStr(new Date());
+    const dayDiff   = (a, b) => Math.round((new Date(a) - new Date(b)) / 86400000);
+    const today     = toDateStr(new Date());
     const yesterday = toDateStr(new Date(Date.now() - 86400000));
 
-    // Current streak — walk backwards from today
     let currentStreak = 0;
-    // Streak is active if the most recent entry is today or yesterday
     if (dates[0] === today || dates[0] === yesterday) {
       currentStreak = 1;
       for (let i = 1; i < dates.length; i++) {
-        // Consecutive = exactly 1 day apart
-        if (dayDiff(dates[i - 1], dates[i]) === 1) {
-          currentStreak++;
-        } else {
-          break;
-        }
+        if (dayDiff(dates[i - 1], dates[i]) === 1) currentStreak++;
+        else break;
       }
     }
 
-    // Longest streak — scan full history
     let longestStreak = 1;
     let runningStreak = 1;
     for (let i = 1; i < dates.length; i++) {
@@ -455,11 +429,7 @@ const getWritingStreak = async (req, res) => {
 
     res.status(200).json({
       message: "Streak data fetched successfully!",
-      data: {
-        currentStreak,
-        longestStreak,
-        totalDays: dates.length,
-      },
+      data: { currentStreak, longestStreak, totalDays: dates.length },
     });
   } catch (error) {
     console.error("Error fetching writing streak: ", error);

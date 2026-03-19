@@ -4,8 +4,7 @@ import Footer from "./Footer";
 import { useEffect, useState } from "react";
 import { useProfileQuery } from "../redux/api/usersApiSlice";
 import { useDispatch } from "react-redux";
-import { removeUserInfo, userInfo, setUserPassword } from "../redux/features/userSlice";
-import { getPasswordFromSession } from "../utils/sessionPassword";
+import { removeUserInfo, userInfo } from "../redux/features/userSlice";
 import Loader from "./Loader";
 import NavLinks from "./navbar/NavLinks";
 import SearchBox from "./navbar/SearchBox";
@@ -21,15 +20,7 @@ const Layout = () => {
   useEffect(() => {
     if (!isLoading) {
       if (profile) {
-        // Rehydrate user info from the profile API response
         dispatch(userInfo(profile));
-
-        // Also restore the password from sessionStorage so decryption
-        // works after a page refresh without requiring the user to log in again
-        const savedPassword = getPasswordFromSession();
-        if (savedPassword) {
-          dispatch(setUserPassword(savedPassword));
-        }
       } else if (isError) {
         dispatch(removeUserInfo());
       }
@@ -83,7 +74,10 @@ const Layout = () => {
               DayBook
             </Link>
           </div>
-          <SearchBox toggle={toggle} />
+
+          {/* expanded=true shows mood + date filters in the sidebar */}
+          <SearchBox toggle={toggle} expanded={true} />
+
           <NavLinks toggle={toggle} />
         </ul>
       </div>

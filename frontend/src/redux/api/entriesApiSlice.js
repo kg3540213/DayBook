@@ -30,16 +30,29 @@ const entriesApiSlice = apiSlice.injectEndpoints({
       invalidatesTags: ["Entries"],
     }),
 
+    // ── Advanced search ──────────────────────────────────────────
+    // Accepts a filters object with any combination of:
+    //   { text, mood, dateFrom, dateTo, page, limit }
+    // All fields are optional — at least one filter must be non-empty
+    // (validated on the backend).
+    // Returns: { data, pagination: { total, page, limit, totalPages } }
     searchEntry: builder.query({
-      query: (text) => ({
-        url: "/entries/search",
-        method: "GET",
-        params: { text },
-      }),
+      query: (filters = {}) => {
+        const { text, mood, dateFrom, dateTo, page, limit } = filters;
+        // Build params — omit keys that are empty/undefined so the URL
+        // stays clean and the backend "at least one filter" guard works
+        const params = {};
+        if (text)     params.text     = text;
+        if (mood)     params.mood     = mood;
+        if (dateFrom) params.dateFrom = dateFrom;
+        if (dateTo)   params.dateTo   = dateTo;
+        if (page)     params.page     = page;
+        if (limit)    params.limit    = limit;
+        return { url: "/entries/search", method: "GET", params };
+      },
     }),
 
     // ── AI Mood Analysis ─────────────────────────────────────────
-    // Send plain-text content to backend → Gemini → returns mood emoji
     analyzeMood: builder.mutation({
       query: (content) => ({
         url: "/entries/analyze",
@@ -55,7 +68,6 @@ const entriesApiSlice = apiSlice.injectEndpoints({
       providesTags: ["Entries"],
     }),
 
-    // ?weeks=8 — last N ISO weeks, default 8
     getEntriesPerWeek: builder.query({
       query: (weeks = 8) => ({
         url: "/entries/analytics/weekly",
@@ -64,7 +76,6 @@ const entriesApiSlice = apiSlice.injectEndpoints({
       providesTags: ["Entries"],
     }),
 
-    // ?months=6 — last N calendar months, default 6
     getEntriesPerMonth: builder.query({
       query: (months = 6) => ({
         url: "/entries/analytics/monthly",
@@ -73,7 +84,6 @@ const entriesApiSlice = apiSlice.injectEndpoints({
       providesTags: ["Entries"],
     }),
 
-    // Current streak, longest streak, total active days
     getWritingStreak: builder.query({
       query: () => "/entries/analytics/streak",
       providesTags: ["Entries"],
