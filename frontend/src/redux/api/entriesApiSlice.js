@@ -3,11 +3,7 @@ import apiSlice from "./apiSlice";
 const entriesApiSlice = apiSlice.injectEndpoints({
   endpoints: (builder) => ({
     addEntry: builder.mutation({
-      query: (data) => ({
-        url: "/entries",
-        method: "POST",
-        body: data,
-      }),
+      query: (data) => ({ url: "/entries", method: "POST", body: data }),
       invalidatesTags: ["Entries"],
     }),
 
@@ -30,22 +26,20 @@ const entriesApiSlice = apiSlice.injectEndpoints({
     }),
 
     deleteEntry: builder.mutation({
-      query: (id) => ({
-        url: `/entries/${id}`,
-        method: "DELETE",
-      }),
+      query: (id) => ({ url: `/entries/${id}`, method: "DELETE" }),
       invalidatesTags: ["Entries"],
     }),
 
     searchEntry: builder.query({
-      query: (data) => ({
+      query: (text) => ({
         url: "/entries/search",
         method: "GET",
-        params: { text: data },
+        params: { text },
       }),
     }),
 
-    // NEW: Send content to backend → Gemini → returns detected mood emoji
+    // ── AI Mood Analysis ─────────────────────────────────────────
+    // Send plain-text content to backend → Gemini → returns mood emoji
     analyzeMood: builder.mutation({
       query: (content) => ({
         url: "/entries/analyze",
@@ -54,9 +48,34 @@ const entriesApiSlice = apiSlice.injectEndpoints({
       }),
     }),
 
-    // NEW: Fetch mood counts grouped by emoji for the analytics page
+    // ── Analytics ────────────────────────────────────────────────
+
     getMoodAnalytics: builder.query({
       query: () => "/entries/analytics/mood",
+      providesTags: ["Entries"],
+    }),
+
+    // ?weeks=8 — last N ISO weeks, default 8
+    getEntriesPerWeek: builder.query({
+      query: (weeks = 8) => ({
+        url: "/entries/analytics/weekly",
+        params: { weeks },
+      }),
+      providesTags: ["Entries"],
+    }),
+
+    // ?months=6 — last N calendar months, default 6
+    getEntriesPerMonth: builder.query({
+      query: (months = 6) => ({
+        url: "/entries/analytics/monthly",
+        params: { months },
+      }),
+      providesTags: ["Entries"],
+    }),
+
+    // Current streak, longest streak, total active days
+    getWritingStreak: builder.query({
+      query: () => "/entries/analytics/streak",
       providesTags: ["Entries"],
     }),
   }),
@@ -71,4 +90,7 @@ export const {
   useSearchEntryQuery,
   useAnalyzeMoodMutation,
   useGetMoodAnalyticsQuery,
+  useGetEntriesPerWeekQuery,
+  useGetEntriesPerMonthQuery,
+  useGetWritingStreakQuery,
 } = entriesApiSlice;

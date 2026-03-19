@@ -1,13 +1,28 @@
 const GEMINI_API_URL =
-  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
+  "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
 
-// Maps Gemini's free-text response to our 4 supported mood emojis
-const normalizeMood = (raw) => {
-  const text = raw.toLowerCase().trim();
-  if (text.includes("happy") || text.includes("joy") || text.includes("positive")) return "🙂";
-  if (text.includes("sad") || text.includes("depressed") || text.includes("unhappy")) return "😔";
-  if (text.includes("angry") || text.includes("frustrated") || text.includes("rage")) return "😡";
-  return "😐"; // neutral fallback
+// Maps Gemini's free-text response to one of the 4 supported mood emojis
+const normalizeMood = (rawText) => {
+  const text = rawText.toLowerCase().trim();
+  if (text.includes("happy") || text.includes("joy") || text.includes("excited"))
+    return "🙂";
+  if (text.includes("sad") || text.includes("grief") || text.includes("depress"))
+    return "😔";
+  if (
+    text.includes("angry") ||
+    text.includes("anger") ||
+    text.includes("furious") ||
+    text.includes("frustrated")
+  )
+    return "😡";
+  if (
+    text.includes("neutral") ||
+    text.includes("calm") ||
+    text.includes("okay") ||
+    text.includes("fine")
+  )
+    return "😐";
+  return "😐"; // safe default
 };
 
 const analyzeMood = async (content) => {
@@ -17,12 +32,14 @@ const analyzeMood = async (content) => {
     throw new Error("GEMINI_API_KEY is not set in environment variables.");
   }
 
-  const prompt = `Analyze the emotional tone of the following journal entry and respond with ONLY one word: happy, sad, angry, or neutral. No explanation, no punctuation, just the single word.
+  const prompt = `Analyze the mood of the following journal entry and respond with exactly one word from this list: happy, sad, angry, neutral.
 
 Journal entry:
 """
 ${content}
-"""`;
+"""
+
+Respond with only one word.`;
 
   const response = await fetch(`${GEMINI_API_URL}?key=${apiKey}`, {
     method: "POST",
@@ -35,13 +52,11 @@ ${content}
   if (!response.ok) {
     const error = await response.json();
     throw new Error(
-      `Gemini API error: ${error?.error?.message || response.statusText}`
+      error?.error?.message || "Failed to get response from Gemini API."
     );
   }
 
   const data = await response.json();
-
-  // Extract the text from Gemini's response structure
   const rawMood =
     data?.candidates?.[0]?.content?.parts?.[0]?.text || "neutral";
 

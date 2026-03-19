@@ -10,6 +10,24 @@ const usersApiSlice = apiSlice.injectEndpoints({
       }),
     }),
 
+    // Verifies the 6-digit OTP — issues JWT on success
+    verifyOtp: builder.mutation({
+      query: (data) => ({
+        url: "/auth/verify-otp",
+        method: "POST",
+        body: data,
+      }),
+    }),
+
+    // Resends a fresh OTP to the given email (60s cooldown enforced by backend)
+    resendOtp: builder.mutation({
+      query: (data) => ({
+        url: "/auth/resend-otp",
+        method: "POST",
+        body: data,
+      }),
+    }),
+
     login: builder.mutation({
       query: (data) => ({
         url: "/auth/login",
@@ -51,6 +69,8 @@ const usersApiSlice = apiSlice.injectEndpoints({
 
 export const {
   useSignupMutation,
+  useVerifyOtpMutation,
+  useResendOtpMutation,
   useLoginMutation,
   useLogoutMutation,
   useProfileQuery,

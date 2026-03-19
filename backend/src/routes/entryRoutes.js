@@ -7,16 +7,20 @@ router.use(authMiddleware);
 
 router.post("/", entryController.createEntry);
 router.get("/", entryController.getEntries);
-router.get("/search", entryController.searchEntries);
 
-// NEW: AI mood analysis — must be before /:id to avoid route conflict
-router.post("/analyze", entryController.analyzeEntry);
+// ── Specific string routes MUST come before /:id ──────────────────
+router.get("/search",          entryController.searchEntries);
+router.post("/analyze",        entryController.analyzeEntry);
 
-// NEW: Mood analytics — count per mood for logged-in user
-router.get("/analytics/mood", entryController.getMoodAnalytics);
+// Analytics — all under /analytics/* namespace
+router.get("/analytics/mood",    entryController.getMoodAnalytics);
+router.get("/analytics/weekly",  entryController.getEntriesPerWeek);
+router.get("/analytics/monthly", entryController.getEntriesPerMonth);
+router.get("/analytics/streak",  entryController.getWritingStreak);
 
-router.get("/:id", entryController.getEntry);
-router.patch("/:id", entryController.updateEntry);
+// ── Param routes last ─────────────────────────────────────────────
+router.get("/:id",    entryController.getEntry);
+router.patch("/:id",  entryController.updateEntry);
 router.delete("/:id", entryController.deleteEntry);
 
 module.exports = router;

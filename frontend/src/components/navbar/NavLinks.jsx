@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { FaHome, FaBookOpen, FaInfo, FaChartBar } from "react-icons/fa";
+import { FaHome, FaBookOpen, FaChartBar, FaInfo } from "react-icons/fa";
 
 const NavLinks = ({ toggle }) => {
   return (
@@ -16,11 +16,10 @@ const NavLinks = ({ toggle }) => {
           Your Entries
         </Link>
       </li>
-      {/* NEW: Analytics link */}
       <li onClick={toggle}>
-        <Link to="/analytics">
+        <Link to="/dashboard">
           <FaChartBar />
-          Analytics
+          Dashboard
         </Link>
       </li>
       <li onClick={toggle}>
