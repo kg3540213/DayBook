@@ -1,16 +1,19 @@
 const express = require("express");
-const router = express.Router();
-const authMiddleware = require("../middleware/authMiddleware");
+const router  = express.Router();
+const authMiddleware  = require("../middleware/authMiddleware");
 const entryController = require("../controllers/entryController");
 
 router.use(authMiddleware);
 
 router.post("/", entryController.createEntry);
-router.get("/", entryController.getEntries);
+router.get("/",  entryController.getEntries);
 
 // ── Specific string routes MUST come before /:id ──────────────────
 router.get("/search",          entryController.searchEntries);
 router.post("/analyze",        entryController.analyzeEntry);
+
+// Export — GET /api/entries/export?format=json|csv
+router.get("/export",          entryController.exportEntries);
 
 // Analytics — all under /analytics/* namespace
 router.get("/analytics/mood",    entryController.getMoodAnalytics);

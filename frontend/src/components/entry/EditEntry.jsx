@@ -9,13 +9,21 @@ import { encryptText, decryptText } from "../../utils/crypto.js";
 import { useSelector } from "react-redux";
 import { toast } from "react-toastify";
 
+// All four moods must be listed — omitting 😐 caused entries saved with
+// Neutral to show a blank/wrong value when the edit modal opened.
+const MOODS = [
+  { value: "🙂", label: "🙂 Happy"   },
+  { value: "😔", label: "😔 Sad"     },
+  { value: "😡", label: "😡 Angry"   },
+  { value: "😐", label: "😐 Neutral" },
+];
+
 const EditEntry = ({ id }) => {
   const [open, setOpen] = useState(false);
   const { data: getEntry, isLoading: entryLoading } = useGetEntryQuery(id, {
     skip: !open,
   });
   const [updateEntry, { isLoading: entryUpdating }] = useUpdateEntryMutation();
-  // Bug fix: read userPassword from correct path in state
   const userPassword = useSelector((state) => state.user.userPassword);
 
   const isLoading = entryLoading || entryUpdating;
@@ -29,20 +37,15 @@ const EditEntry = ({ id }) => {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value,
-    });
+    setFormData({ ...formData, [name]: value });
   };
 
   useEffect(() => {
     if (getEntry) {
-      // Bug fix: decrypt the stored ciphertext before populating the form
       let decryptedContent = getEntry.data?.content || "";
       if (userPassword && decryptedContent) {
         try {
           const result = decryptText(decryptedContent, userPassword);
-          // decryptText returns empty string if decryption fails — fall back to raw
           decryptedContent = result || decryptedContent;
         } catch {
           // leave as-is if decryption fails (e.g. old unencrypted entries)
@@ -50,10 +53,10 @@ const EditEntry = ({ id }) => {
       }
 
       setFormData({
-        title: getEntry.data?.title || "",
-        mood: getEntry.data?.mood || "",
+        title:   getEntry.data?.title || "",
+        mood:    getEntry.data?.mood  || "",
         content: decryptedContent,
-        date: new Date(getEntry.data?.date).toISOString().slice(0, 10) || "",
+        date:    new Date(getEntry.data?.date).toISOString().slice(0, 10) || "",
       });
     }
   }, [getEntry, userPassword]);
@@ -61,16 +64,13 @@ const EditEntry = ({ id }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Bug fix: guard against missing password
     if (!userPassword) {
       toast.error("Session expired. Please log out and log in again to edit entries.");
       return;
     }
 
     try {
-      // Bug fix: re-encrypt the (now plaintext) content before saving
       const encryptedContent = encryptText(formData.content, userPassword);
-
       const response = await updateEntry({
         id,
         data: { ...formData, content: encryptedContent },
@@ -133,7 +133,7 @@ const EditEntry = ({ id }) => {
                 <label htmlFor={`mood.${id}`}>
                   Your Mood <span className="text-red-500">*</span>
                 </label>
-
+                {/* Bug fix: was missing 😐 Neutral — all four moods now listed */}
                 <select
                   name="mood"
                   id={`mood.${id}`}
@@ -141,9 +141,11 @@ const EditEntry = ({ id }) => {
                   onChange={handleChange}
                   className="select rounded-lg my-3"
                 >
-                  <option value="🙂">🙂 Happy</option>
-                  <option value="😔">😔 Sad</option>
-                  <option value="😡">😡 Angry</option>
+                  {MOODS.map((m) => (
+                    <option key={m.value} value={m.value}>
+                      {m.label}
+                    </option>
+                  ))}
                 </select>
               </div>
             </div>
@@ -168,7 +170,7 @@ const EditEntry = ({ id }) => {
               className="btn btn-primary w-full rounded-lg mt-3"
               disabled={isLoading}
             >
-              {isLoading ? "Please wait!.." : "Save Changes"}
+              {isLoading ? "Please wait..." : "Save Changes"}
             </button>
           </form>
         </div>

@@ -13,12 +13,12 @@ const updateProfile = async (req, res) => {
   const { firstName, lastName } = req.body;
 
   if (!firstName) {
-    return res.status(422).json({
-      message: "First name is required!",
-    });
+    return res.status(422).json({ message: "First name is required!" });
   }
 
-  if (firstName.length > 50 || lastName.length > 50) {
+  // Bug fix: lastName may be undefined (optional field) — use optional chaining
+  // to avoid "Cannot read properties of undefined (reading 'length')" TypeError.
+  if (firstName.length > 50 || (lastName && lastName.length > 50)) {
     return res.status(422).json({
       message: "First Name and Last Name length should be less than 50!",
     });
@@ -27,16 +27,16 @@ const updateProfile = async (req, res) => {
   try {
     const updateUser = await User.findByIdAndUpdate(
       loggedUser._id,
-      {
-        firstName,
-        lastName,
-      },
+      { firstName, lastName },
       { new: true }
     );
 
     res.status(200).json({
       message: "Profile updated successfully!",
-      data: { firstName: updateUser.firstName, lastName: updateUser.lastName },
+      data: {
+        firstName: updateUser.firstName,
+        lastName:  updateUser.lastName,
+      },
     });
   } catch (error) {
     console.error("Error updating profile!: ", error);

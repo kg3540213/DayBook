@@ -4,11 +4,12 @@ import Footer from "./Footer";
 import { useEffect, useState } from "react";
 import { useProfileQuery } from "../redux/api/usersApiSlice";
 import { useDispatch } from "react-redux";
-import { removeUserInfo, userInfo } from "../redux/features/userSlice";
+import { removeUserInfo, userInfo, setUserPassword } from "../redux/features/userSlice";
 import Loader from "./Loader";
 import NavLinks from "./navbar/NavLinks";
 import SearchBox from "./navbar/SearchBox";
 import logo from "../assets/logo.svg";
+import { getPasswordFromSession } from "../utils/sessionPassword";
 
 const Layout = () => {
   const { data: profile, isError, isLoading } = useProfileQuery();
@@ -21,6 +22,16 @@ const Layout = () => {
     if (!isLoading) {
       if (profile) {
         dispatch(userInfo(profile));
+
+        // ── Restore encryption password after page refresh ──────────
+        // userPassword lives only in Redux (in-memory) and is lost on
+        // every refresh. sessionPassword.js persists it to sessionStorage
+        // (tab-scoped, auto-cleared on tab close) so we can restore it
+        // here without asking the user to log in again.
+        const savedPassword = getPasswordFromSession();
+        if (savedPassword) {
+          dispatch(setUserPassword(savedPassword));
+        }
       } else if (isError) {
         dispatch(removeUserInfo());
       }

@@ -9,26 +9,21 @@ const crypto = require("crypto");
 // Helpers
 // ------------------------------------------------------------------
 
-// Generates a cryptographically random 6-digit OTP string
 const generateOtp = () =>
   crypto.randomInt(100000, 999999).toString();
 
 // ── SIGNUP ────────────────────────────────────────────────────────
-// Step 1 of 2.
-// Validates fields → checks email not taken → hashes password →
-// creates unverified user → generates OTP → hashes OTP → stores →
-// sends email → returns { message, email }.
-// NO token is issued here — token comes only after OTP is verified.
-// ------------------------------------------------------------------
 const signup = async (req, res) => {
   try {
     let { email } = req.body;
+
+    // Bug fix: guard before .trim() — missing fields return 400 first
+    if (!email || !req.body.firstName || !req.body.password)
+      return res.status(400).json({ message: "Fill all required fields!" });
+
     email = email.trim().toLowerCase();
     const { firstName, lastName, password } = req.body;
 
-    // ── Field validation ────────────────────────────────────────
-    if (!email || !firstName || !password)
-      return res.status(400).json({ message: "Fill all required fields!" });
     if (!validator.isEmail(email))
       return res.status(422).json({ message: "Invalid email format!" });
     if (email.length > 50)
@@ -41,33 +36,26 @@ const signup = async (req, res) => {
       return res.status(422).json({ message: "Password cannot exceed 100 characters!" });
     if (
       !validator.isStrongPassword(password, {
-        minLength: 8,
-        minUppercase: 1,
-        minLowercase: 1,
-        minNumbers: 1,
-        minSymbols: 1,
+        minLength: 8, minUppercase: 1, minLowercase: 1,
+        minNumbers: 1, minSymbols: 1,
       })
     )
       return res.status(422).json({ message: "Please enter a strong password!" });
 
-    // ── Email uniqueness check ───────────────────────────────────
     const existingUser = await User.findOne({ email });
 
     if (existingUser) {
-      // If the user exists and is already verified — reject
       if (existingUser.isVerified)
         return res.status(422).json({ message: "User already exists!" });
 
-      // If unverified — they may be retrying signup.
-      // Re-send a fresh OTP instead of creating a duplicate document.
       const otp = generateOtp();
       const otpHash = await bcrypt.hash(otp, 10);
       const now = new Date();
 
-      existingUser.password = await bcrypt.hash(password, 10);
+      existingUser.password  = await bcrypt.hash(password, 10);
       existingUser.firstName = firstName;
-      existingUser.lastName = lastName || "";
-      existingUser.otpHash = otpHash;
+      existingUser.lastName  = lastName || "";
+      existingUser.otpHash   = otpHash;
       existingUser.otpExpiry = new Date(now.getTime() + 10 * 60 * 1000);
       existingUser.otpSentAt = now;
       await existingUser.save();
@@ -80,25 +68,20 @@ const signup = async (req, res) => {
       });
     }
 
-    // ── Create new unverified user ───────────────────────────────
     const hashedPassword = await bcrypt.hash(password, 10);
     const otp = generateOtp();
     const otpHash = await bcrypt.hash(otp, 10);
     const now = new Date();
 
     await User.create({
-      email,
-      firstName,
-      lastName,
+      email, firstName, lastName,
       password: hashedPassword,
       isVerified: false,
       otpHash,
-      otpExpiry: new Date(now.getTime() + 10 * 60 * 1000), // 10 min
+      otpExpiry: new Date(now.getTime() + 10 * 60 * 1000),
       otpSentAt: now,
     });
 
-    // Send OTP email — if this fails, user still exists unverified.
-    // They can use resend-otp to try again.
     await sendOtpEmail(email, otp, firstName);
 
     res.status(201).json({
@@ -112,10 +95,6 @@ const signup = async (req, res) => {
 };
 
 // ── VERIFY OTP ────────────────────────────────────────────────────
-// Step 2 of 2.
-// Validates OTP → marks user verified → issues JWT cookie → returns user.
-// This is the endpoint that completes registration.
-// ------------------------------------------------------------------
 const verifyOtp = async (req, res) => {
   try {
     let { email, otp } = req.body;
@@ -124,7 +103,7 @@ const verifyOtp = async (req, res) => {
       return res.status(400).json({ message: "Email and OTP are required!" });
 
     email = email.trim().toLowerCase();
-    otp = otp.trim();
+    otp   = otp.trim();
 
     if (!/^\d{6}$/.test(otp))
       return res.status(422).json({ message: "OTP must be a 6-digit number!" });
@@ -133,36 +112,30 @@ const verifyOtp = async (req, res) => {
 
     if (!user)
       return res.status(404).json({ message: "User not found!" });
-
     if (user.isVerified)
       return res.status(400).json({ message: "Email is already verified!" });
-
-    // Check expiry first — clearer error for expired codes
     if (!user.otpExpiry || new Date() > user.otpExpiry)
       return res.status(400).json({ message: "OTP has expired! Please request a new one." });
 
-    // Compare submitted OTP against stored hash
     const isMatch = await bcrypt.compare(otp, user.otpHash);
     if (!isMatch)
       return res.status(400).json({ message: "Invalid OTP! Please try again." });
 
-    // ── Mark verified + clear OTP fields ────────────────────────
     user.isVerified = true;
-    user.otpHash = null;
-    user.otpExpiry = null;
-    user.otpSentAt = null;
+    user.otpHash    = null;
+    user.otpExpiry  = null;
+    user.otpSentAt  = null;
     await user.save();
 
-    // Issue JWT — same as login flow
     generateToken(user._id, res);
 
     res.status(200).json({
       message: "Email verified successfully! Welcome to DayBook.",
       data: {
-        _id: user._id,
-        email: user.email,
+        _id:       user._id,
+        email:     user.email,
         firstName: user.firstName,
-        lastName: user.lastName,
+        lastName:  user.lastName,
       },
     });
   } catch (error) {
@@ -172,9 +145,6 @@ const verifyOtp = async (req, res) => {
 };
 
 // ── RESEND OTP ────────────────────────────────────────────────────
-// Regenerates and resends the OTP.
-// Rate-limited: only 1 resend per 60 seconds to prevent abuse.
-// ------------------------------------------------------------------
 const resendOtp = async (req, res) => {
   try {
     let { email } = req.body;
@@ -188,14 +158,11 @@ const resendOtp = async (req, res) => {
 
     if (!user)
       return res.status(404).json({ message: "User not found!" });
-
     if (user.isVerified)
       return res.status(400).json({ message: "Email is already verified!" });
 
-    // ── 60-second cooldown ───────────────────────────────────────
     if (user.otpSentAt) {
-      const secondsSinceLastSend =
-        (new Date() - new Date(user.otpSentAt)) / 1000;
+      const secondsSinceLastSend = (new Date() - new Date(user.otpSentAt)) / 1000;
       if (secondsSinceLastSend < 60) {
         const waitSeconds = Math.ceil(60 - secondsSinceLastSend);
         return res.status(429).json({
@@ -205,12 +172,11 @@ const resendOtp = async (req, res) => {
       }
     }
 
-    // ── Generate + store new OTP ─────────────────────────────────
     const otp = generateOtp();
     const otpHash = await bcrypt.hash(otp, 10);
     const now = new Date();
 
-    user.otpHash = otpHash;
+    user.otpHash   = otpHash;
     user.otpExpiry = new Date(now.getTime() + 10 * 60 * 1000);
     user.otpSentAt = now;
     await user.save();
@@ -227,19 +193,22 @@ const resendOtp = async (req, res) => {
 };
 
 // ── LOGIN ─────────────────────────────────────────────────────────
-// Unchanged — but now also checks isVerified before issuing token.
-// ------------------------------------------------------------------
+// Bug fix: guard against undefined email/password before calling .trim()
 const login = async (req, res) => {
   try {
-    let { email } = req.body;
-    email = email.trim().toLowerCase();
-    const { password } = req.body;
+    const { email: rawEmail, password } = req.body;
+
+    // Return 400 immediately if either field is missing — avoids
+    // "Cannot read properties of undefined (reading 'trim')" TypeError
+    if (!rawEmail || !password)
+      return res.status(400).json({ message: "Email and password are required!" });
+
+    const email = rawEmail.trim().toLowerCase();
 
     const user = await User.findOne({ email });
     if (!user)
       return res.status(401).json({ message: "Invalid credentials!" });
 
-    // Block unverified users from logging in
     if (!user.isVerified)
       return res.status(403).json({
         message: "Email not verified! Please complete OTP verification.",
@@ -255,10 +224,10 @@ const login = async (req, res) => {
     res.json({
       message: "User logged in successfully!",
       data: {
-        _id: user._id,
+        _id:       user._id,
         firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email,
+        lastName:  user.lastName,
+        email:     user.email,
       },
     });
   } catch (error) {
@@ -291,11 +260,8 @@ const changePassword = async (req, res) => {
 
     if (
       !validator.isStrongPassword(newPassword, {
-        minLength: 8,
-        minUppercase: 1,
-        minLowercase: 1,
-        minNumbers: 1,
-        minSymbols: 1,
+        minLength: 8, minUppercase: 1, minLowercase: 1,
+        minNumbers: 1, minSymbols: 1,
       })
     )
       return res.status(422).json({ message: "Please enter a strong password!" });
