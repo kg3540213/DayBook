@@ -144,7 +144,10 @@ const Entries = () => {
 
   if (isLoading) {
     return (
-      <div className="flex justify-center items-center min-h-[calc(100dvh-64px-52px)]">
+      <div
+        className="flex justify-center items-center"
+        style={{ minHeight: "calc(100dvh - 64px - 52px)" }}
+      >
         <Loader />
       </div>
     );
@@ -209,7 +212,10 @@ const Entries = () => {
   // ── Empty state ───────────────────────────────────────────────────
   if (allFilteredEntries.length === 0) {
     return (
-      <div className="text-center mt-10 mx-7 min-h-[calc(100dvh-64px-52px-40px)]">
+      <div
+        className="relative text-center mt-10 mx-7 pb-24"
+        style={{ minHeight: "calc(100dvh - 64px - 52px)" }}
+      >
         {isSearchActive ? (
           <>
             <ActiveFilters
@@ -227,7 +233,8 @@ const Entries = () => {
             <p className="text-lg">Start your journey by clicking the '+' button below!</p>
           </>
         )}
-        <div className="fixed bottom-20 z-10 left-[calc(100vw-7rem)]">
+        {/* FAB — fixed to bottom-right, above footer (footer ~52px + gap) */}
+        <div className="fixed bottom-20 right-8 z-10">
           <AddEntry />
         </div>
       </div>
@@ -236,8 +243,19 @@ const Entries = () => {
 
   // ── Normal render ─────────────────────────────────────────────────
   return (
-    <div>
-      <div className="fixed bottom-20 z-10 left-[calc(100vw-7rem)]">
+    /*
+      min-h ensures the page body always fills at least the visible
+      viewport (minus navbar ~64px and footer ~52px), so the footer
+      never floats up when there are only 1–3 entries on screen.
+      flex + flex-col lets the grid grow naturally while pb-24 keeps
+      the last row clear of the fixed FAB button.
+    */
+    <div
+      className="flex flex-col pb-24"
+      style={{ minHeight: "calc(100dvh - 64px - 52px)" }}
+    >
+      {/* FAB — fixed bottom-right, safely above footer */}
+      <div className="fixed bottom-20 right-8 z-10">
         <AddEntry />
       </div>
 
