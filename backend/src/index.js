@@ -17,7 +17,9 @@ app.use(
 );
 
 // ── Core middleware ───────────────────────────────────────────────
-app.use(express.json({ limit: "50kb" })); // reject oversized payloads
+// 10mb limit is required for base64-encoded image uploads.
+// A 5MB image encodes to ~6.7MB in base64 — 50kb was rejecting all uploads.
+app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
 
@@ -36,8 +38,6 @@ app.use((req, res) => {
 });
 
 // ── Global error handler ──────────────────────────────────────────
-// Catches anything thrown inside route handlers that wasn't caught
-// by a try/catch.
 app.use((err, req, res, _next) => {
   console.error("[Unhandled error]", err);
   res.status(err.status || 500).json({

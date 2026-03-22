@@ -8,11 +8,9 @@ const {
   deleteProfilePhoto,
 } = require("../controllers/userController");
 
-router.get( "/me",          authMiddleware, viewProfile);
-router.put( "/me",          authMiddleware, updateProfile);
-
-// Profile photo — POST to upload, DELETE to remove
-router.post(  "/me/photo",  authMiddleware, uploadProfilePhoto);
-router.delete("/me/photo",  authMiddleware, deleteProfilePhoto);
+router.get(   "/me",       authMiddleware, viewProfile);
+router.put(   "/me",       authMiddleware, updateProfile);
+router.post(  "/me/photo", authMiddleware, uploadProfilePhoto);
+router.delete("/me/photo", authMiddleware, deleteProfilePhoto);
 
 module.exports = router;

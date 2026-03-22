@@ -19,36 +19,32 @@ const userSchema = new mongoose.Schema({
   },
 
   // ── Profile Photo ─────────────────────────────────────────────
-  // Cloudinary URL of the uploaded profile picture.
-  // null means the user has never uploaded one → show default avatar.
+  // Cloudinary secure_url — null means no photo uploaded yet
   profilePhoto: {
-    type: String,
+    type:    String,
     default: null,
   },
-  // Cloudinary public_id — needed to delete the old image before uploading a new one.
+  // Cloudinary public_id — used to delete the old image on re-upload
   profilePhotoPublicId: {
-    type: String,
+    type:    String,
     default: null,
   },
 
   // ── Email OTP Verification ────────────────────────────────────
   isVerified: {
-    type: Boolean,
+    type:    Boolean,
     default: false,
   },
-  // Bcrypt hash of the 6-digit OTP — never store raw OTP in DB
   otpHash: {
-    type: String,
+    type:    String,
     default: null,
   },
-  // Expiry timestamp — OTP valid for 10 minutes from generation
   otpExpiry: {
-    type: Date,
+    type:    Date,
     default: null,
   },
-  // Tracks when last OTP was sent — used for 60-second resend cooldown
   otpSentAt: {
-    type: Date,
+    type:    Date,
     default: null,
   },
 });

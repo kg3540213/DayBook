@@ -8,9 +8,10 @@ import {
 import { setProfilePhoto } from "../../redux/features/userSlice";
 import { toast } from "react-toastify";
 
-// ── Default avatar initials ───────────────────────────────────────
+// ── Initials avatar fallback ──────────────────────────────────────
 const DefaultAvatar = ({ firstName, lastName }) => {
-  const initials = `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase() || "?";
+  const initials =
+    `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase() || "?";
   return (
     <div className="w-24 h-24 rounded-full bg-primary/20 border-2 border-primary flex items-center justify-center text-2xl font-bold text-primary select-none">
       {initials}
@@ -19,91 +20,111 @@ const DefaultAvatar = ({ firstName, lastName }) => {
 };
 
 const Profile = ({ close }) => {
-  const dispatch   = useDispatch();
-  const user       = useSelector((state) => state.user.data);
+  const dispatch  = useDispatch();
+  const user      = useSelector((state) => state.user.data);
 
-  const [firstName,    setFirstName]    = useState("");
-  const [lastName,     setLastName]     = useState("");
-  const [preview,      setPreview]      = useState(null); // local preview URL
-  const [isDragging,   setIsDragging]   = useState(false);
+  const [firstName,  setFirstName]  = useState("");
+  const [lastName,   setLastName]   = useState("");
+  const [preview,    setPreview]    = useState(null);   // local base64 preview
+  const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = useRef(null);
 
-  const [updateProfile,      { isLoading: saving         }] = useUpdateProfileMutation();
-  const [uploadProfilePhoto, { isLoading: uploading      }] = useUploadProfilePhotoMutation();
-  const [deleteProfilePhoto, { isLoading: deleting       }] = useDeleteProfilePhotoMutation();
+  const [updateProfile,      { isLoading: saving    }] = useUpdateProfileMutation();
+  const [uploadProfilePhoto, { isLoading: uploading }] = useUploadProfilePhotoMutation();
+  const [deleteProfilePhoto, { isLoading: deleting  }] = useDeleteProfilePhotoMutation();
 
   const currentPhoto = user?.data?.profilePhoto ?? null;
 
   useEffect(() => {
     if (user) {
       setFirstName(user?.data?.firstName ?? "");
-      setLastName(user?.data?.lastName  ?? "");
+      setLastName(user?.data?.lastName   ?? "");
     }
     setPreview(null);
   }, [user, close]);
 
-  // ── Convert File → base64 data URI ───────────────────────────────
+  // ── File → base64 data URI ────────────────────────────────────────
   const toBase64 = (file) =>
     new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload  = () => resolve(reader.result);
-      reader.onerror = reject;
+      reader.onerror = (err) => reject(err);
       reader.readAsDataURL(file);
     });
 
-  // ── Validate and set local preview ───────────────────────────────
+  // ── Validate then set local preview ──────────────────────────────
   const handleFile = async (file) => {
     if (!file) return;
 
-    const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-    if (!allowed.includes(file.type)) {
+    const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (!ALLOWED_TYPES.includes(file.type)) {
       toast.error("Only JPG, PNG, WEBP, or GIF images are allowed.");
       return;
     }
+
+    // 5 MB client-side guard
     if (file.size > 5 * 1024 * 1024) {
       toast.error("Image must be smaller than 5 MB.");
       return;
     }
 
-    const base64 = await toBase64(file);
-    setPreview(base64);
+    try {
+      const base64 = await toBase64(file);
+      setPreview(base64);
+    } catch {
+      toast.error("Could not read the file. Please try again.");
+    }
   };
 
-  const handleFileInput  = (e)  => handleFile(e.target.files[0]);
-  const handleDrop       = (e)  => { e.preventDefault(); setIsDragging(false); handleFile(e.dataTransfer.files[0]); };
-  const handleDragOver   = (e)  => { e.preventDefault(); setIsDragging(true);  };
-  const handleDragLeave  = ()   => setIsDragging(false);
+  const handleFileInput = (e) => {
+    handleFile(e.target.files[0]);
+    // Reset so picking the same file again still triggers onChange
+    e.target.value = "";
+  };
 
-  // ── Upload preview to Cloudinary ─────────────────────────────────
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    handleFile(e.dataTransfer.files[0]);
+  };
+
+  const handleDragOver  = (e) => { e.preventDefault(); setIsDragging(true);  };
+  const handleDragLeave = ()   => setIsDragging(false);
+
+  // ── Upload preview to Cloudinary via backend ─────────────────────
   const handleUploadPhoto = async () => {
     if (!preview) return;
+
     try {
       const res = await uploadProfilePhoto({ image: preview }).unwrap();
       dispatch(setProfilePhoto(res.profilePhoto));
       setPreview(null);
-      toast.success(res.message);
+      toast.success(res.message || "Photo updated!");
     } catch (err) {
-      toast.error(err?.data?.message || "Upload failed. Please try again.");
+      console.error("Upload error:", err);
+      toast.error(
+        err?.data?.message || "Upload failed. Check your internet and try again."
+      );
     }
   };
 
-  // ── Delete current photo ──────────────────────────────────────────
+  // ── Remove current photo ──────────────────────────────────────────
   const handleDeletePhoto = async () => {
     try {
       const res = await deleteProfilePhoto().unwrap();
       dispatch(setProfilePhoto(null));
-      toast.success(res.message);
+      toast.success(res.message || "Photo removed.");
     } catch (err) {
       toast.error(err?.data?.message || "Could not remove photo.");
     }
   };
 
-  // ── Save name changes ─────────────────────────────────────────────
+  // ── Save name ─────────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       const res = await updateProfile({ firstName, lastName }).unwrap();
-      toast.success(res.message);
+      toast.success(res.message || "Profile saved.");
       close();
     } catch (err) {
       toast.error(err?.data?.message || "Update failed.");
@@ -118,11 +139,11 @@ const Profile = ({ close }) => {
         Profile Information
       </h2>
 
-      {/* ── Photo section ──────────────────────────────────────── */}
+      {/* ── Photo area ─────────────────────────────────────────── */}
       <div className="flex flex-col items-center gap-3 mb-4">
 
-        {/* Avatar — shows preview → current photo → initials fallback */}
-        <div className="relative group">
+        {/* Avatar — preview → current photo → initials */}
+        <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
           {preview || currentPhoto ? (
             <img
               src={preview ?? currentPhoto}
@@ -135,15 +156,9 @@ const Profile = ({ close }) => {
               lastName={user?.data?.lastName}
             />
           )}
-
-          {/* Click overlay to open file picker */}
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-medium"
-          >
+          <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold pointer-events-none">
             Change
-          </button>
+          </div>
         </div>
 
         {/* Hidden file input */}
@@ -161,65 +176,74 @@ const Profile = ({ close }) => {
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onClick={() => fileInputRef.current?.click()}
-          className={`w-full border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors text-sm ${
+          className={`w-full border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors text-sm select-none ${
             isDragging
               ? "border-primary bg-primary/10 text-primary"
               : "border-base-300 hover:border-primary/50 text-base-content/50"
           }`}
         >
           {preview
-            ? "New photo selected — click Upload below to save"
+            ? "✅ Photo selected — click Upload to save"
             : "Drag & drop a photo here, or click to browse"}
-          <p className="text-xs mt-1 text-base-content/40">JPG, PNG, WEBP or GIF · max 5 MB</p>
+          <p className="text-xs mt-1 text-base-content/40">
+            JPG, PNG, WEBP or GIF · max 5 MB
+          </p>
         </div>
 
-        {/* Action buttons for photo */}
-        <div className="flex gap-2 w-full">
-          {preview && (
-            <>
-              <button
-                type="button"
-                onClick={handleUploadPhoto}
-                disabled={isProcessing}
-                className="btn btn-primary btn-sm flex-1 rounded-xl"
-              >
-                {uploading ? "Uploading..." : "Upload Photo"}
-              </button>
-              <button
-                type="button"
-                onClick={() => setPreview(null)}
-                disabled={isProcessing}
-                className="btn btn-ghost btn-sm rounded-xl"
-              >
-                Cancel
-              </button>
-            </>
-          )}
-
-          {!preview && currentPhoto && (
+        {/* Upload / Cancel buttons — shown only when a preview is staged */}
+        {preview && (
+          <div className="flex gap-2 w-full">
             <button
               type="button"
-              onClick={handleDeletePhoto}
+              onClick={handleUploadPhoto}
               disabled={isProcessing}
-              className="btn btn-error btn-outline btn-sm flex-1 rounded-xl"
+              className="btn btn-primary btn-sm flex-1 rounded-xl"
             >
-              {deleting ? "Removing..." : "Remove Photo"}
+              {uploading ? (
+                <><span className="loading loading-spinner loading-xs" /> Uploading…</>
+              ) : (
+                "Upload Photo"
+              )}
             </button>
-          )}
-        </div>
+            <button
+              type="button"
+              onClick={() => setPreview(null)}
+              disabled={isProcessing}
+              className="btn btn-ghost btn-sm rounded-xl"
+            >
+              Cancel
+            </button>
+          </div>
+        )}
+
+        {/* Remove button — shown only when a photo exists and no new one is staged */}
+        {!preview && currentPhoto && (
+          <button
+            type="button"
+            onClick={handleDeletePhoto}
+            disabled={isProcessing}
+            className="btn btn-error btn-outline btn-sm w-full rounded-xl"
+          >
+            {deleting ? (
+              <><span className="loading loading-spinner loading-xs" /> Removing…</>
+            ) : (
+              "Remove Photo"
+            )}
+          </button>
+        )}
       </div>
 
       <div className="divider my-1" />
 
       {/* ── Name form ──────────────────────────────────────────── */}
       <p className="text-center text-sm text-base-content/50 mb-3">
-        Update your first and last name below.
+        Update your display name below.
       </p>
 
       <form onSubmit={handleSubmit}>
-        <div className="flex gap-4 justify-center items-start flex-wrap">
-          <div>
-            <label htmlFor="firstName" className="text-sm">
+        <div className="flex gap-4 justify-center flex-wrap">
+          <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
+            <label htmlFor="firstName" className="text-sm font-medium">
               First Name <span className="text-red-500">*</span>
             </label>
             <input
@@ -227,13 +251,13 @@ const Profile = ({ close }) => {
               id="firstName"
               value={firstName}
               onChange={(e) => setFirstName(e.target.value)}
-              className="input rounded-lg my-2 w-full"
+              className="input rounded-lg"
               placeholder="First name"
               required
             />
           </div>
-          <div>
-            <label htmlFor="lastName" className="text-sm">
+          <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
+            <label htmlFor="lastName" className="text-sm font-medium">
               Last Name
             </label>
             <input
@@ -241,7 +265,7 @@ const Profile = ({ close }) => {
               id="lastName"
               value={lastName}
               onChange={(e) => setLastName(e.target.value)}
-              className="input rounded-lg my-2 w-full"
+              className="input rounded-lg"
               placeholder="Optional"
             />
           </div>
@@ -249,10 +273,10 @@ const Profile = ({ close }) => {
 
         <button
           type="submit"
-          className="btn btn-primary w-full rounded-lg mt-3"
+          className="btn btn-primary w-full rounded-lg mt-4"
           disabled={isProcessing}
         >
-          {saving ? "Saving..." : "Save Changes"}
+          {saving ? "Saving…" : "Save Changes"}
         </button>
       </form>
     </div>
