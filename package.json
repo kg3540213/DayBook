@@ -4,8 +4,8 @@
   "description": "A MERN stack application to manage daily journals and tasks",
   "main": "src/index.js",
   "scripts": {
-    "start": "node src/index",
-    "dev": "nodemon src/index"
+    "build": "cd frontend && npm install && npm run build",
+    "start": "node backend/src/index.js"
   },
   "author": "Koushik Ghosh",
   "license": "ISC",

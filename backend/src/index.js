@@ -3,12 +3,16 @@ const helmet = require("helmet");
 const morgan = require("morgan");
 require("dotenv").config();
 
+const path = require("path");
+
 const connectDB = require("./config/database");
 const redis = require("./config/redis");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
+
 const app = express();
 
+// ── Security & Logging ────────────────────────────────────────────
 app.use(helmet());
 app.use(
   morgan((tokens, req, res) => {
@@ -17,13 +21,16 @@ app.use(
 );
 
 // ── Core middleware ───────────────────────────────────────────────
-// 10mb limit is required for base64-encoded image uploads.
-// A 5MB image encodes to ~6.7MB in base64 — 50kb was rejecting all uploads.
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
-app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL,
+    credentials: true,
+  })
+);
 
-// ── Application routes ────────────────────────────────────────────
+// ── Routes ────────────────────────────────────────────────────────
 const authRoutes = require("./routes/authRoutes");
 const userRoutes = require("./routes/userRoutes");
 const entryRoutes = require("./routes/entryRoutes");
@@ -32,8 +39,15 @@ app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/entries", entryRoutes);
 
-// ── 404 handler ───────────────────────────────────────────────────
-app.use((req, res) => {
+// ── Serve Frontend (IMPORTANT) ────────────────────────────────────
+app.use(express.static(path.join(__dirname, "../../frontend/dist")));
+
+app.get("*", (req, res) => {
+  if (!req.path.startsWith("/api")) {
+    return res.sendFile(
+      path.join(__dirname, "../../frontend/dist/index.html")
+    );
+  }
   res.status(404).json({ message: "Route not found." });
 });
 
@@ -51,6 +65,7 @@ let server;
 connectDB()
   .then(() => {
     console.log("Database connected successfully!");
+
     server = app.listen(process.env.PORT, () => {
       console.log(`Server is running on port ${process.env.PORT}!`);
     });
