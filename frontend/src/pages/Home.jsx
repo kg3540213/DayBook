@@ -4,6 +4,13 @@ import { useSelector } from "react-redux";
 const Home = () => {
   const user = useSelector((state) => state.user.data);
 
+  const firstName  = user?.data?.firstName  ?? "";
+  const lastName   = user?.data?.lastName   ?? "";
+  const photoUrl   = user?.data?.profilePhoto ?? null;
+
+  const initials =
+    `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase() || "?";
+
   return (
     <div>
 
@@ -11,9 +18,23 @@ const Home = () => {
       <section className="relative flex flex-col justify-center items-center text-center min-h-[calc(100svh-64px-52px)] px-6 py-16">
         {user ? (
           <>
-            <span className="text-5xl mb-5">👋</span>
+            {/* Profile photo or initials */}
+            <div className="mb-5">
+              {photoUrl ? (
+                <img
+                  src={photoUrl}
+                  alt="avatar"
+                  className="w-20 h-20 rounded-full object-cover border-4 border-primary shadow-lg mx-auto"
+                />
+              ) : (
+                <div className="w-20 h-20 rounded-full bg-primary/20 border-4 border-primary flex items-center justify-center text-2xl font-black text-primary mx-auto select-none">
+                  {initials}
+                </div>
+              )}
+            </div>
+
             <h1 className="text-4xl sm:text-5xl font-bold mb-4">
-              Hey, {user.data?.firstName}!
+              Hey, {firstName}! 👋
             </h1>
             <p className="text-base-content/60 text-lg max-w-lg mb-8 leading-relaxed">
               Great to have you back. Your journal is waiting — go ahead and

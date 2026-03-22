@@ -18,6 +18,19 @@ const userSchema = new mongoose.Schema({
     required: true,
   },
 
+  // ── Profile Photo ─────────────────────────────────────────────
+  // Cloudinary URL of the uploaded profile picture.
+  // null means the user has never uploaded one → show default avatar.
+  profilePhoto: {
+    type: String,
+    default: null,
+  },
+  // Cloudinary public_id — needed to delete the old image before uploading a new one.
+  profilePhotoPublicId: {
+    type: String,
+    default: null,
+  },
+
   // ── Email OTP Verification ────────────────────────────────────
   isVerified: {
     type: Boolean,

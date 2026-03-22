@@ -10,7 +10,6 @@ const usersApiSlice = apiSlice.injectEndpoints({
       }),
     }),
 
-    // Verifies the 6-digit OTP — issues JWT on success
     verifyOtp: builder.mutation({
       query: (data) => ({
         url: "/auth/verify-otp",
@@ -19,7 +18,6 @@ const usersApiSlice = apiSlice.injectEndpoints({
       }),
     }),
 
-    // Resends a fresh OTP to the given email (60s cooldown enforced by backend)
     resendOtp: builder.mutation({
       query: (data) => ({
         url: "/auth/resend-otp",
@@ -64,6 +62,25 @@ const usersApiSlice = apiSlice.injectEndpoints({
         body: data,
       }),
     }),
+
+    // ── Profile photo ─────────────────────────────────────────────
+    // Sends the image as a base64 data URI string in { image }
+    uploadProfilePhoto: builder.mutation({
+      query: (data) => ({
+        url: "/users/me/photo",
+        method: "POST",
+        body: data,
+      }),
+      invalidatesTags: ["User"],
+    }),
+
+    deleteProfilePhoto: builder.mutation({
+      query: () => ({
+        url: "/users/me/photo",
+        method: "DELETE",
+      }),
+      invalidatesTags: ["User"],
+    }),
   }),
 });
 
@@ -76,4 +93,6 @@ export const {
   useProfileQuery,
   useUpdateProfileMutation,
   useChangePasswordMutation,
+  useUploadProfilePhotoMutation,
+  useDeleteProfilePhotoMutation,
 } = usersApiSlice;
