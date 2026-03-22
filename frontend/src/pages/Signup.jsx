@@ -14,17 +14,23 @@ import {
 } from "../redux/features/userSlice";
 import { savePasswordToSession } from "../utils/sessionPassword";
 
+// ── LPU domain constant ───────────────────────────────────────────
+const ALLOWED_DOMAIN = "lpu.in";
+
+// Returns true only if email ends exactly with @lpu.in
+const isLpuEmail = (email) =>
+  email.trim().toLowerCase().endsWith(`@${ALLOWED_DOMAIN}`);
+
 // ── OTP input — 6 individual digit boxes ─────────────────────────
 const OtpInput = ({ otp, setOtp }) => {
   const inputsRef = useRef([]);
 
   const handleChange = (e, index) => {
-    const val = e.target.value.replace(/\D/g, ""); // digits only
+    const val = e.target.value.replace(/\D/g, "");
     if (!val) return;
     const newOtp = otp.split("");
-    newOtp[index] = val.slice(-1); // one digit per box
+    newOtp[index] = val.slice(-1);
     setOtp(newOtp.join(""));
-    // Auto-advance to next box
     if (index < 5) inputsRef.current[index + 1]?.focus();
   };
 
@@ -44,7 +50,6 @@ const OtpInput = ({ otp, setOtp }) => {
     e.preventDefault();
     const pasted = e.clipboardData.getData("text").replace(/\D/g, "").slice(0, 6);
     setOtp(pasted.padEnd(6, "").slice(0, 6));
-    // Focus last filled box
     const focusIndex = Math.min(pasted.length, 5);
     inputsRef.current[focusIndex]?.focus();
   };
@@ -70,44 +75,42 @@ const OtpInput = ({ otp, setOtp }) => {
 
 // ── Main component ────────────────────────────────────────────────
 const Signup = () => {
-  const user = useSelector((state) => state.user.data);
+  const user         = useSelector((state) => state.user.data);
   const pendingEmail = useSelector((state) => state.user.pendingEmail);
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
+  const dispatch     = useDispatch();
+  const navigate     = useNavigate();
 
-  // step: "form" | "otp"
   const [step, setStep] = useState(pendingEmail ? "otp" : "form");
 
   const [formData, setFormData] = useState({
     firstName: "",
-    lastName: "",
-    email: "",
-    password: "",
+    lastName:  "",
+    email:     "",
+    password:  "",
   });
+
+  // Tracks whether the typed email violates the domain rule in real-time
+  const [emailError, setEmailError] = useState("");
+
   const [passwordForEncryption, setPasswordForEncryption] = useState("");
   const [otp, setOtp] = useState("");
 
-  // Resend countdown — starts at 60, counts down to 0
   const [countdown, setCountdown] = useState(0);
   const timerRef = useRef(null);
 
-  const [signup,    { isLoading: signingUp  }] = useSignupMutation();
-  const [verifyOtp, { isLoading: verifying  }] = useVerifyOtpMutation();
-  const [resendOtp, { isLoading: resending  }] = useResendOtpMutation();
+  const [signup,    { isLoading: signingUp }] = useSignupMutation();
+  const [verifyOtp, { isLoading: verifying }] = useVerifyOtpMutation();
+  const [resendOtp, { isLoading: resending }] = useResendOtpMutation();
 
-  // Redirect if already logged in
   if (user) return <Navigate to="/" replace />;
 
-  // ── Countdown timer helpers ────────────────────────────────────
+  // ── Countdown helpers ──────────────────────────────────────────
   const startCountdown = (seconds = 60) => {
     setCountdown(seconds);
     clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
       setCountdown((prev) => {
-        if (prev <= 1) {
-          clearInterval(timerRef.current);
-          return 0;
-        }
+        if (prev <= 1) { clearInterval(timerRef.current); return 0; }
         return prev - 1;
       });
     }, 1000);
@@ -115,14 +118,46 @@ const Signup = () => {
 
   useEffect(() => () => clearInterval(timerRef.current), []);
 
+  // ── Handle email field change — instant domain check ──────────
+  const handleEmailChange = (e) => {
+    const val = e.target.value;
+    setFormData((prev) => ({ ...prev, email: val }));
+
+    // Only validate once the user has typed past the @ symbol
+    if (val.includes("@")) {
+      if (!isLpuEmail(val)) {
+        setEmailError(`Only @${ALLOWED_DOMAIN} email addresses are allowed.`);
+      } else {
+        setEmailError("");
+      }
+    } else {
+      setEmailError(""); // no @ yet, don't nag yet
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    if (name === "email") {
+      handleEmailChange(e);
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
+    }
+  };
+
   // ── Step 1: Signup form submit ─────────────────────────────────
   const handleSignup = async (e) => {
     e.preventDefault();
+
+    // Guard: block submit if email domain is wrong
+    if (!isLpuEmail(formData.email)) {
+      setEmailError(`Only @${ALLOWED_DOMAIN} email addresses are allowed.`);
+      toast.error(`Only LPU college emails (@${ALLOWED_DOMAIN}) can sign up.`);
+      return;
+    }
+
     try {
       const response = await signup(formData).unwrap();
-      // Store email in Redux so OTP step knows where to send verification
       dispatch(setPendingEmail(formData.email));
-      // Keep password in memory for entry encryption after verification
       setPasswordForEncryption(formData.password);
       setStep("otp");
       startCountdown(60);
@@ -140,13 +175,11 @@ const Signup = () => {
       return;
     }
     try {
-      const email = pendingEmail || formData.email;
+      const email    = pendingEmail || formData.email;
       const response = await verifyOtp({ email, otp }).unwrap();
 
-      // OTP verified — dispatch user + password, clear pending email
       dispatch(userInfo(response));
       dispatch(setUserPassword(passwordForEncryption));
-      // Persist password to sessionStorage so it survives page refresh
       savePasswordToSession(passwordForEncryption);
       dispatch(setPendingEmail(null));
 
@@ -162,7 +195,7 @@ const Signup = () => {
   const handleResend = async () => {
     if (countdown > 0) return;
     try {
-      const email = pendingEmail || formData.email;
+      const email    = pendingEmail || formData.email;
       const response = await resendOtp({ email }).unwrap();
       toast.success(response.message);
       startCountdown(60);
@@ -172,11 +205,6 @@ const Signup = () => {
       if (wait) startCountdown(wait);
       toast.error(error?.data?.message || "Failed to resend code.");
     }
-  };
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   // ── Render ─────────────────────────────────────────────────────
@@ -189,6 +217,12 @@ const Signup = () => {
           <div className="my-10 text-center">
             <p className="text-lg font-semibold">Create your DayBook account</p>
             <p className="text-lg font-semibold">and stay organized effortlessly.</p>
+
+            {/* LPU-only notice */}
+            <div className="inline-flex items-center gap-2 mt-3 px-4 py-2 rounded-xl bg-primary/10 border border-primary/30 text-sm font-medium text-primary">
+              🎓 Open exclusively to LPU students &amp; staff &nbsp;·&nbsp;
+              <span className="font-mono">@{ALLOWED_DOMAIN}</span> only
+            </div>
           </div>
 
           <div className="flex justify-center px-7 my-10">
@@ -231,19 +265,33 @@ const Signup = () => {
 
                     <div>
                       <label htmlFor="email">
-                        Email <span className="text-red-500">*</span>
+                        LPU Email <span className="text-red-500">*</span>
                       </label>
                       <input
                         id="email"
                         type="email"
                         name="email"
-                        className="input w-full rounded-lg my-3"
-                        placeholder="Email address"
+                        className={`input w-full rounded-lg my-3 ${
+                          emailError ? "input-error border-error" : ""
+                        }`}
+                        placeholder={`e.g. avikghosh32@${ALLOWED_DOMAIN}`}
                         value={formData.email}
                         onChange={handleChange}
                         required
                         autoComplete="on"
                       />
+                      {/* Instant domain error message */}
+                      {emailError && (
+                        <p className="text-error text-xs -mt-2 mb-2 flex items-center gap-1">
+                          <span>⚠️</span> {emailError}
+                        </p>
+                      )}
+                      {/* Green tick when domain is correct */}
+                      {!emailError && formData.email.includes("@") && isLpuEmail(formData.email) && (
+                        <p className="text-success text-xs -mt-2 mb-2 flex items-center gap-1">
+                          <span>✅</span> Valid LPU email address
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -265,7 +313,7 @@ const Signup = () => {
                     <button
                       type="submit"
                       className="btn btn-primary w-full rounded-lg my-3"
-                      disabled={signingUp}
+                      disabled={signingUp || !!emailError}
                     >
                       {signingUp ? "Sending code..." : "Create Account"}
                     </button>
@@ -290,7 +338,7 @@ const Signup = () => {
           <div className="card card-xl bg-base-200 w-full max-w-sm rounded-2xl shadow-xl hover:shadow-2xl">
             <div className="card-body">
               <h2 className="card-title block text-center text-lg mb-1">
-                Verify your email
+                Verify your LPU email
               </h2>
               <p className="text-center text-sm text-base-content/60 mb-2">
                 We sent a 6-digit code to
@@ -311,7 +359,6 @@ const Signup = () => {
                 </button>
               </form>
 
-              {/* Resend section */}
               <div className="text-center mt-4 text-sm">
                 {countdown > 0 ? (
                   <p className="text-base-content/50">
@@ -330,7 +377,6 @@ const Signup = () => {
                 )}
               </div>
 
-              {/* Go back to fix email */}
               <button
                 type="button"
                 onClick={() => {

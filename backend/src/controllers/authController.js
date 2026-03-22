@@ -3,8 +3,15 @@ const bcrypt = require("bcryptjs");
 const validator = require("validator");
 const generateToken = require("../utils/generateToken");
 const { sendOtpEmail } = require("../services/EmailService");
-// crypto here helped to generate otp
 const crypto = require("crypto");
+
+// ── LPU domain restriction ────────────────────────────────────────
+// Only email addresses ending with @lpu.in are allowed to sign up.
+const ALLOWED_DOMAIN = "lpu.in";
+
+const isLpuEmail = (email) => {
+  return email.endsWith(`@${ALLOWED_DOMAIN}`);
+};
 
 const generateOtp = () =>
   crypto.randomInt(100000, 999999).toString();
@@ -14,7 +21,6 @@ const signup = async (req, res) => {
   try {
     let { email } = req.body;
 
-    // Bug fix: guard before .trim() — missing fields return 400 first
     if (!email || !req.body.firstName || !req.body.password)
       return res.status(400).json({ message: "Fill all required fields!" });
 
@@ -23,6 +29,13 @@ const signup = async (req, res) => {
 
     if (!validator.isEmail(email))
       return res.status(422).json({ message: "Invalid email format!" });
+
+    // ── LPU domain check — reject immediately if not @lpu.in ─────
+    if (!isLpuEmail(email))
+      return res.status(403).json({
+        message: `Only LPU college email addresses (@${ALLOWED_DOMAIN}) are allowed to sign up.`,
+      });
+
     if (email.length > 50)
       return res.status(422).json({ message: "Email cannot exceed 50 characters!" });
     if (firstName.length > 50)
@@ -84,7 +97,7 @@ const signup = async (req, res) => {
     await sendOtpEmail(email, otp, firstName);
 
     res.status(201).json({
-      message: "Account created! Please check your email for the verification code.",
+      message: "Account created! Please check your LPU email for the verification code.",
       email,
     });
   } catch (error) {
@@ -196,12 +209,16 @@ const login = async (req, res) => {
   try {
     const { email: rawEmail, password } = req.body;
 
-    // Return 400 immediately if either field is missing — avoids
-    // "Cannot read properties of undefined (reading 'trim')" TypeError
     if (!rawEmail || !password)
       return res.status(400).json({ message: "Email and password are required!" });
 
     const email = rawEmail.trim().toLowerCase();
+
+    // ── LPU domain check on login too ────────────────────────────
+    if (!isLpuEmail(email))
+      return res.status(403).json({
+        message: `Only LPU college email addresses (@${ALLOWED_DOMAIN}) are allowed.`,
+      });
 
     const user = await User.findOne({ email });
     if (!user)
@@ -242,7 +259,6 @@ const logout = (req, res) => {
 
 // ── CHANGE PASSWORD ───────────────────────────────────────────────
 const changePassword = async (req, res) => {
-  
   try {
     const loggedUser = req.user;
     const { oldPassword, newPassword } = req.body;
