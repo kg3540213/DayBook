@@ -33,24 +33,7 @@ const createEntry = async (req, res) => {
   }
 };
 
-// ─── GET ALL (with pagination + Redis cache) ──────────────────────
-// GET /api/entries?page=1&limit=20
-//
-// Query params:
-//   page   {number}  1-based page number.  Default: 1
-//   limit  {number}  Results per page.      Default: 20, max 100
-//
-// Response:
-// {
-//   message: "...",
-//   data:    [...entries],
-//   pagination: { total, page, limit, totalPages }
-// }
-//
-// Cache: results are stored in Redis for ENTRY_TTL seconds.
-//        Key includes page + limit so different page sizes don't share
-//        a stale cache entry.
-// ------------------------------------------------------------------
+
 const getEntries = async (req, res) => {
   const loggedUser = req.user;
 
@@ -106,7 +89,8 @@ const getEntry = async (req, res) => {
     const entry = await Entry.findOne({
       _id: entryId,
       createdBy: loggedUser._id,
-    }).populate("createdBy", "firstName lastName");
+    })
+    // .populate("createdBy", "firstName lastName");
 
     if (!entry)
       return res.status(404).json({ message: "Entry not found or does not belong to the logged-in user!" });
@@ -172,9 +156,7 @@ const deleteEntry = async (req, res) => {
   }
 };
 
-// ─── SEARCH ───────────────────────────────────────────────────────
-// (unchanged — search results are not cached because they depend on
-//  arbitrary user-supplied filter combinations)
+
 const searchEntries = async (req, res) => {
   const loggedUser = req.user;
 
@@ -247,17 +229,7 @@ const searchEntries = async (req, res) => {
   }
 };
 
-// ─── EXPORT ───────────────────────────────────────────────────────
-// GET /api/entries/export?format=json   (default)
-// GET /api/entries/export?format=csv
-//
-// Returns ALL of the user's entries (no pagination) so they can save
-// a personal backup.  Content is still AES-encrypted — the server
-// never stores or transmits plaintext.
-//
-// JSON response: standard { message, data } shape.
-// CSV  response: Content-Disposition attachment, one row per entry.
-// ------------------------------------------------------------------
+
 const exportEntries = async (req, res) => {
   const loggedUser = req.user;
   const format     = (req.query.format ?? "json").toLowerCase();

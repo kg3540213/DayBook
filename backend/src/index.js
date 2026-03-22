@@ -1,30 +1,33 @@
-const express    = require("express");
-const helmet     = require("helmet");
+const express = require("express");
+const helmet = require("helmet");
+const morgan = require("morgan");
 require("dotenv").config();
 
-const connectDB       = require("./config/database");
-const redis           = require("./config/redis");
-const cookieParser    = require("cookie-parser");
-const cors            = require("cors");
+const connectDB = require("./config/database");
+const redis = require("./config/redis");
+const cookieParser = require("cookie-parser");
+const cors = require("cors");
 const app = express();
 
-
 app.use(helmet());
+app.use(
+  morgan((tokens, req, res) => {
+    return tokens.url(req, res);
+  })
+);
 
 // ── Core middleware ───────────────────────────────────────────────
-app.use(express.json({ limit: "50kb" }));  // reject oversized payloads
+app.use(express.json({ limit: "50kb" })); // reject oversized payloads
 app.use(cookieParser());
 app.use(cors({ origin: process.env.FRONTEND_URL, credentials: true }));
 
-
-
 // ── Application routes ────────────────────────────────────────────
-const authRoutes  = require("./routes/authRoutes");
-const userRoutes  = require("./routes/userRoutes");
+const authRoutes = require("./routes/authRoutes");
+const userRoutes = require("./routes/userRoutes");
 const entryRoutes = require("./routes/entryRoutes");
 
-app.use("/api/auth",    authRoutes);
-app.use("/api/users",   userRoutes);
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
 app.use("/api/entries", entryRoutes);
 
 // ── 404 handler ───────────────────────────────────────────────────
@@ -34,8 +37,7 @@ app.use((req, res) => {
 
 // ── Global error handler ──────────────────────────────────────────
 // Catches anything thrown inside route handlers that wasn't caught
-// by a try/catch.  Returns a clean JSON body instead of an HTML stack.
-// eslint-disable-next-line no-unused-vars
+// by a try/catch.
 app.use((err, req, res, _next) => {
   console.error("[Unhandled error]", err);
   res.status(err.status || 500).json({
@@ -57,4 +59,3 @@ connectDB()
     console.error("Database not connected!", error);
     process.exit(1);
   });
-

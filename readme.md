@@ -490,7 +490,6 @@ Edit Entry
 ## Author
 
 **Koushik Ghosh**
-GitHub: [@thenileshnishad](https://github.com/thenileshnishad)
 
 ---
 

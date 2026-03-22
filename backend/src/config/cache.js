@@ -1,22 +1,5 @@
 const redis = require("./redis");
 
-// ------------------------------------------------------------------
-// cache.js — thin wrapper around ioredis for application-level caching
-//
-// Key naming convention (always prefix "cache:" so rate-limiter keys
-// and other Redis data are never accidentally touched):
-//
-//   cache:user:<userId>:entries:<page>:<limit>
-//   cache:user:<userId>:analytics:mood
-//   cache:user:<userId>:analytics:weekly:<weeks>
-//   cache:user:<userId>:analytics:monthly:<months>
-//   cache:user:<userId>:analytics:streak
-//
-// All write operations (create / update / delete) call invalidateUser()
-// which SCAN-deletes every "cache:user:<userId>:*" key so stale data
-// is never served.
-// ------------------------------------------------------------------
-
 const ENTRY_TTL     = 5  * 60; // 5 min  — entry list pages
 const ANALYTICS_TTL = 10 * 60; // 10 min — aggregation results
 

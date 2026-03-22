@@ -1,15 +1,6 @@
 const nodemailer = require("nodemailer");
 
-// ------------------------------------------------------------------
-// Transporter
-// Uses Gmail SMTP. For other providers change host/port accordingly.
-// Requires in .env:
-//   EMAIL_USER=your@gmail.com
-//   EMAIL_PASS=your_gmail_app_password  ← NOT your account password
-//                                          Generate at:
-//                                          Google Account → Security →
-//                                          2-Step Verification → App Passwords
-// ------------------------------------------------------------------
+
 const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
@@ -18,13 +9,7 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// ------------------------------------------------------------------
-// sendOtpEmail
-// Sends a clean 6-digit OTP email to the user during signup.
-// @param {string} toEmail  - recipient address
-// @param {string} otp      - plain 6-digit OTP (before hashing)
-// @param {string} firstName - used in greeting
-// ------------------------------------------------------------------
+
 const sendOtpEmail = async (toEmail, otp, firstName) => {
   const mailOptions = {
     from: `"DayBook" <${process.env.EMAIL_USER}>`,

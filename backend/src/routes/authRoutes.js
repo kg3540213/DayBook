@@ -8,15 +8,7 @@ const {
   resendOtpLimiter,
 } = require("../middleware/rateLimiter");
 
-// ── Public routes (no auth required) ─────────────────────────────
 
-// signup has no rate limiter here intentionally:
-//   - It already sends an OTP email, so a spammer is throttled by
-//     resend-otp instead once they reach verify / resend.
-//   - Adding a tight limit on signup risks locking out legitimate
-//     users sharing a corporate NAT/proxy IP.
-//   - If you want to add one anyway, use a generous window
-//     (e.g. 20 req / 60 min) and add it the same way as below.
 router.post("/signup", authController.signup);
 
 // loginLimiter:    5 attempts / 15 min per IP
@@ -33,7 +25,7 @@ router.post("/verify-otp", verifyOtpLimiter, authController.verifyOtp);
 // per-user 60-second cooldown, so two independent guards are active.
 router.post("/resend-otp", resendOtpLimiter, authController.resendOtp);
 
-router.post("/logout", authController.logout);
+router.post("/logout", authMiddleware, authController.logout);
 
 // ── Protected routes ──────────────────────────────────────────────
 router.put("/change-password", authMiddleware, authController.changePassword);

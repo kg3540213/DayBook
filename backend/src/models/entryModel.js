@@ -15,6 +15,7 @@ const entrySchema = new mongoose.Schema(
     },
     content: String,
   },
+  // Automatically add and manage createdAt and updatedAt fields in your database document.
   { timestamps: true }
 );
 

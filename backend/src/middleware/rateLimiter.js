@@ -1,20 +1,5 @@
 const { rateLimit } = require("express-rate-limit");
 
-// ------------------------------------------------------------------
-// makeLimiter
-// Factory that creates a pre-configured express-rate-limit instance.
-//
-// @param {object} opts
-//   windowMs  {number}  Time window in milliseconds
-//   max       {number}  Max requests allowed within the window
-//   message   {string}  Human-readable error sent to the client
-//
-// Behaviour:
-//   - Counts by IP (default keyGenerator)
-//   - Returns HTTP 429 with a JSON body on breach
-//   - Sets standard RateLimit-* response headers
-//   - Does NOT skip successful requests — every attempt counts
-// ------------------------------------------------------------------
 const makeLimiter = ({ windowMs, max, message }) =>
   rateLimit({
     windowMs,
@@ -25,7 +10,7 @@ const makeLimiter = ({ windowMs, max, message }) =>
     },
     // Emit standard draft-6 headers (RateLimit-Policy, RateLimit, etc.)
     standardHeaders: "draft-6",
-    // Do NOT send the legacy X-RateLimit-* headers
+    // disable old header
     legacyHeaders: false,
   });
 
@@ -49,10 +34,7 @@ const verifyOtpLimiter = makeLimiter({
     "Too many verification attempts from this IP. Please wait 10 minutes and try again.",
 });
 
-// Resend OTP — 3 requests per 5 minutes per IP.
-// Prevents email flooding / SMS-pump abuse.
-// Note: the backend also enforces a per-user 60-second cooldown on top
-// of this IP-level guard, giving two independent layers of protection.
+
 const resendOtpLimiter = makeLimiter({
   windowMs: 5 * 60 * 1000, // 5 minutes
   max: 3,

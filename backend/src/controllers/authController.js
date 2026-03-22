@@ -3,11 +3,8 @@ const bcrypt = require("bcryptjs");
 const validator = require("validator");
 const generateToken = require("../utils/generateToken");
 const { sendOtpEmail } = require("../services/EmailService");
+// crypto here helped to generate otp
 const crypto = require("crypto");
-
-// ------------------------------------------------------------------
-// Helpers
-// ------------------------------------------------------------------
 
 const generateOtp = () =>
   crypto.randomInt(100000, 999999).toString();
@@ -51,6 +48,8 @@ const signup = async (req, res) => {
       const otp = generateOtp();
       const otpHash = await bcrypt.hash(otp, 10);
       const now = new Date();
+
+      console.log(otp, otpHash);
 
       existingUser.password  = await bcrypt.hash(password, 10);
       existingUser.firstName = firstName;
@@ -193,7 +192,6 @@ const resendOtp = async (req, res) => {
 };
 
 // ── LOGIN ─────────────────────────────────────────────────────────
-// Bug fix: guard against undefined email/password before calling .trim()
 const login = async (req, res) => {
   try {
     const { email: rawEmail, password } = req.body;
@@ -244,6 +242,7 @@ const logout = (req, res) => {
 
 // ── CHANGE PASSWORD ───────────────────────────────────────────────
 const changePassword = async (req, res) => {
+  
   try {
     const loggedUser = req.user;
     const { oldPassword, newPassword } = req.body;
