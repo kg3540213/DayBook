@@ -1,496 +1,289 @@
-# DayBook 📓
+# 📓 DayBook
 
-> A secure, full-featured personal journaling application built with the MERN stack. Write freely — your entries are encrypted, your emotions are tracked, and your progress is visualized.
-
----
-
-## Table of Contents
-
-- [Overview](#overview)
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Project Structure](#project-structure)
-- [Database Models](#database-models)
-- [API Reference](#api-reference)
-- [Environment Variables](#environment-variables)
-- [Getting Started](#getting-started)
-- [Security Design](#security-design)
-- [Frontend Architecture](#frontend-architecture)
-- [State Management](#state-management)
+A private, secure journaling app built exclusively for **LPU (Lovely Professional University)** students. Write freely — every entry is AES-256 encrypted in your browser before it ever reaches the server.
 
 ---
 
-## Overview
+## ✨ Features
 
-DayBook is a MERN stack journaling app where users can write, organize, and reflect on their daily experiences. Every entry is **encrypted on the client side** before being stored — the server never sees plaintext content. Mood is tracked per entry (manually or via AI), and an analytics dashboard visualizes writing habits over time.
-
----
-
-## Features
-
-### Authentication
-- **Email + Password signup** with 6-digit OTP email verification
-- JWT authentication via secure httpOnly cookies
-- 60-second OTP resend cooldown with server-side enforcement
-- Unverified users blocked from login until OTP is confirmed
-- Change password (requires current password confirmation)
-
-### Journal Entries
-- Create, read, update, delete entries
-- Each entry has a **title**, **date**, **mood**, and **content**
-- Content is **AES-encrypted** on the frontend using the user's password as the key — plaintext never leaves the browser
-- Entries sorted by date descending
-
-### AI Mood Detection
-- Click "AI Analyze Mood" when writing an entry
-- Content is sent to **Google Gemini 2.0 Flash**
-- Gemini returns one of: `happy`, `sad`, `angry`, `neutral`
-- Mood emoji auto-filled in the form (`🙂 😔 😡 😐`)
-
-### Search
-- Full-text search across title and content
-- Uses MongoDB `$text` index — no collection scans
-- Title matches weighted 2× higher than content matches
-
-### Analytics Dashboard
-- **Mood distribution** — donut pie chart with percentage breakdown
-- **Entries per week** — bar chart with 4w / 8w / 12w range toggle
-- **Entries per month** — line chart with 3m / 6m / 12m range toggle
-- **Writing streak** — current streak 🔥, longest streak, total active days
-- All powered by MongoDB aggregation pipelines
-
-### Profile Management
-- Update first name and last name
-- Email address cannot be changed (used as unique identifier)
+- **📝 Daily Journaling** — Create, edit, and delete journal entries with a title, date, mood, and content
+- **🔐 End-to-End Encryption** — Entries are AES-256 encrypted client-side using your password as the key. The server only stores ciphertext — even the developer cannot read your entries
+- **😊 Mood Tracking** — Log your mood (Happy, Sad, Angry, Neutral) with every entry and watch patterns emerge over time
+- **🤖 AI Mood Detection** — Powered by Gemini 2.0 Flash — paste your entry and let AI detect your mood automatically
+- **📊 Analytics Dashboard** — Visual charts for mood trends, writing streaks, weekly and monthly activity
+- **🔍 Smart Search** — Search across titles and encrypted content by keyword, mood, or date range
+- **🖼️ Profile Photo** — Upload a profile picture stored on Cloudinary; displayed on the home page and navbar
+- **📄 Pagination** — Entries page shows 6 entries per page (3 per row) with Prev/Next navigation
+- **🎓 LPU-Only Access** — Only `@lpu.in` email addresses can register. Invalid domains are rejected instantly on both the frontend and backend
+- **✉️ OTP Verification** — Email-based 6-digit OTP sent on signup. Unverified accounts cannot log in
+- **🔑 JWT Auth** — Secure `httpOnly` cookie-based JWT authentication with 7-day expiry
 
 ---
 
-## Tech Stack
-
-### Backend
-| Package | Version | Purpose |
-|---|---|---|
-| Node.js + Express | ^4.21 | HTTP server and routing |
-| MongoDB + Mongoose | ^8.8 | Database and ODM |
-| bcryptjs | ^3.0 | Password and OTP hashing |
-| jsonwebtoken | ^9.0 | JWT generation and verification |
-| nodemailer | latest | OTP email delivery via Gmail SMTP |
-| validator | ^13.12 | Field validation |
-| dotenv | ^16.4 | Environment variable loading |
-| cookie-parser | ^1.4 | Cookie parsing middleware |
-| cors | ^2.8 | Cross-origin request handling |
+## 🛠️ Tech Stack
 
 ### Frontend
-| Package | Version | Purpose |
-|---|---|---|
-| React | ^19.0 | UI library |
-| Redux Toolkit + RTK Query | ^2.6 | State management and API calls |
-| React Router DOM | ^7.2 | Client-side routing |
-| Tailwind CSS v4 + DaisyUI v5 | ^4.0 / ^5.0 | Styling and UI components |
-| Recharts | latest | Analytics charts |
-| crypto-js | ^4.2 | AES client-side encryption |
-| react-toastify | ^11.0 | Toast notifications |
-| react-icons | ^5.5 | Icon library |
+| Technology | Purpose |
+|---|---|
+| React 19 | UI library |
+| React Router v7 | Client-side routing |
+| Redux Toolkit + RTK Query | State management & API calls |
+| Tailwind CSS v4 + DaisyUI | Styling & component library |
+| React Toastify | Toast notifications |
+
+### Backend
+| Technology | Purpose |
+|---|---|
+| Node.js + Express | REST API server |
+| MongoDB + Mongoose | Database & ODM |
+| Redis | Caching layer |
+| JWT + httpOnly Cookies | Authentication |
+| Bcrypt | Password & OTP hashing |
+| Cloudinary | Profile photo storage |
+| Nodemailer | OTP email delivery |
+| Gemini AI | AI mood detection |
 
 ---
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 daybook/
-├── backend/
-│   ├── src/
-│   │   ├── config/
-│   │   │   └── database.js           # MongoDB connection
-│   │   ├── controllers/
-│   │   │   ├── authController.js     # signup, verifyOtp, resendOtp, login, logout, changePassword
-│   │   │   ├── entryController.js    # CRUD + search + analyzeEntry + analytics
-│   │   │   └── userController.js     # viewProfile, updateProfile
-│   │   ├── middleware/
-│   │   │   └── authMiddleware.js     # JWT verification, attaches req.user
-│   │   ├── models/
-│   │   │   ├── userModel.js          # User schema with OTP fields
-│   │   │   └── entryModel.js         # Entry schema with text + compound indexes
-│   │   ├── routes/
-│   │   │   ├── authRoutes.js         # /api/auth/*
-│   │   │   ├── entryRoutes.js        # /api/entries/*
-│   │   │   └── userRoutes.js         # /api/users/*
-│   │   ├── services/
-│   │   │   ├── emailService.js       # Nodemailer OTP email sender
-│   │   │   └── geminiService.js      # Gemini API call + mood normalization
-│   │   ├── utils/
-│   │   │   └── generateToken.js      # JWT creation + cookie setting
-│   │   └── index.js                  # Express app entry point
-│   ├── .env.example
-│   └── package.json
+├── frontend/
+│   ├── public/
+│   └── src/
+│       ├── components/
+│       │   ├── auth/
+│       │   │   ├── Profile.jsx       # Profile info + photo upload
+│       │   │   ├── Password.jsx      # Change password
+│       │   │   └── Logout.jsx
+│       │   ├── entry/
+│       │   │   ├── EntryCard.jsx
+│       │   │   ├── AddEntry.jsx
+│       │   │   └── ...
+│       │   ├── navbar/
+│       │   │   └── NavProfile.jsx    # Navbar avatar + dropdown
+│       │   ├── Footer.jsx
+│       │   └── Loader.jsx
+│       ├── pages/
+│       │   ├── Home.jsx              # Landing + profile photo display
+│       │   ├── About.jsx             # About + LinkedIn + contact form
+│       │   ├── Entries.jsx           # Paginated entries grid
+│       │   ├── Dashboard.jsx
+│       │   ├── Signup.jsx            # LPU email validation + OTP step
+│       │   └── Login.jsx
+│       ├── redux/
+│       │   ├── api/
+│       │   │   ├── apiSlice.js
+│       │   │   ├── usersApiSlice.js  # Auth + profile + photo endpoints
+│       │   │   └── entriesApiSlice.js
+│       │   └── features/
+│       │       └── userSlice.js      # User state + setProfilePhoto action
+│       └── utils/
+│           ├── crypto.js             # AES-256 encrypt/decrypt helpers
+│           └── sessionPassword.js
 │
-└── frontend/
-    ├── src/
-    │   ├── components/
-    │   │   ├── auth/
-    │   │   │   ├── Logout.jsx        # Logout modal + sessionStorage clear
-    │   │   │   ├── Password.jsx      # Change password modal
-    │   │   │   └── Profile.jsx       # Edit profile modal
-    │   │   ├── entry/
-    │   │   │   ├── AddEntry.jsx      # Create entry + AI mood button
-    │   │   │   ├── DeleteEntry.jsx   # Delete confirmation modal
-    │   │   │   ├── EditEntry.jsx     # Edit entry + decrypt on load + AI mood
-    │   │   │   ├── EntryCard.jsx     # Entry display card + decrypt on render
-    │   │   │   └── ReadMore.jsx      # Full entry modal
-    │   │   ├── navbar/
-    │   │   │   ├── Navbar.jsx        # Top navigation bar
-    │   │   │   ├── NavLinks.jsx      # Nav link items
-    │   │   │   ├── NavProfile.jsx    # User dropdown menu
-    │   │   │   └── SearchBox.jsx     # Search input
-    │   │   ├── Footer.jsx
-    │   │   ├── Layout.jsx            # Root layout + profile rehydration + password restore
-    │   │   ├── Loader.jsx
-    │   │   ├── ModalLayout.jsx
-    │   │   └── ThemeController.jsx   # Light/dark toggle
-    │   ├── pages/
-    │   │   ├── About.jsx
-    │   │   ├── Dashboard.jsx         # Analytics dashboard with Recharts
-    │   │   ├── Entries.jsx           # Entry list + search results
-    │   │   ├── Home.jsx
-    │   │   ├── Login.jsx
-    │   │   ├── NotFound.jsx
-    │   │   └── Signup.jsx            # Two-step: form → OTP verification
-    │   ├── redux/
-    │   │   ├── api/
-    │   │   │   ├── apiSlice.js       # RTK Query base API
-    │   │   │   ├── entriesApiSlice.js
-    │   │   │   └── usersApiSlice.js
-    │   │   ├── features/
-    │   │   │   └── userSlice.js      # data, userPassword, pendingEmail
-    │   │   └── store.js
-    │   ├── utils/
-    │   │   ├── crypto.js             # encryptText / decryptText (AES via crypto-js)
-    │   │   └── sessionPassword.js    # localStorage read/write/clear for userPassword
-    │   ├── App.jsx
-    │   └── main.jsx
-    └── package.json
+└── backend/
+    └── src/
+        ├── config/
+        │   ├── database.js
+        │   ├── redis.js
+        │   └── cloudinary.js         # Cloudinary SDK config
+        ├── controllers/
+        │   ├── authController.js     # Signup (LPU check), OTP, login, logout
+        │   └── userController.js     # Profile view/update + photo upload/delete
+        ├── middleware/
+        │   └── authMiddleware.js
+        ├── models/
+        │   └── userModel.js          # User schema with profilePhoto fields
+        ├── routes/
+        │   ├── authRoutes.js
+        │   ├── userRoutes.js         # GET/PUT /me, POST/DELETE /me/photo
+        │   └── entryRoutes.js
+        ├── services/
+        │   └── EmailService.js
+        └── index.js                  # Express app entry point (10mb body limit)
 ```
 
 ---
 
-## Database Models
+## 🚀 Getting Started
 
-### User
+### Prerequisites
 
-| Field | Type | Description |
-|---|---|---|
-| `email` | String (unique, required) | Login identifier |
-| `firstName` | String (required) | Display name |
-| `lastName` | String | Optional |
-| `password` | String (required) | Bcrypt hashed |
-| `isVerified` | Boolean (default: false) | Email OTP verified |
-| `otpHash` | String | Bcrypt hash of current OTP |
-| `otpExpiry` | Date | OTP expires 10 minutes after generation |
-| `otpSentAt` | Date | Timestamp of last OTP send (60s cooldown) |
+- Node.js v18+
+- MongoDB (local or Atlas)
+- Redis (local or Upstash)
+- A [Cloudinary](https://cloudinary.com) account (free tier is fine)
+- A Gmail account for sending OTP emails (or any SMTP provider)
 
-### Entry
+---
 
-| Field | Type | Description |
-|---|---|---|
-| `createdBy` | ObjectId (ref: User) | Owner |
-| `date` | Date (required) | Entry date (set by user) |
-| `title` | String | Max 20 characters |
-| `mood` | String (enum) | `🙂` `😔` `😡` `😐` |
-| `content` | String | AES-encrypted, max 1500 chars (pre-encryption) |
-| `createdAt` | Date | Auto (Mongoose timestamps) |
-| `updatedAt` | Date | Auto (Mongoose timestamps) |
+### 1. Clone the repository
 
-**MongoDB Indexes:**
-
-```js
-// Full-text search — title matches rank 2× higher than content
-{ title: "text", content: "text" }  weights: { title: 2, content: 1 }
-
-// Compound index — covers filter queries and date sorts
-{ createdBy: 1, date: -1, mood: 1 }
+```bash
+git clone https://github.com/your-username/daybook.git
+cd daybook
 ```
 
 ---
 
-## API Reference
+### 2. Backend setup
 
-### Auth — `/api/auth`
+```bash
+cd backend
+npm install
+```
 
-| Method | Endpoint | Auth | Description |
-|---|---|---|---|
-| POST | `/signup` | No | Create unverified account, send OTP email |
-| POST | `/verify-otp` | No | Verify OTP → issue JWT cookie |
-| POST | `/resend-otp` | No | Resend OTP (60s cooldown) |
-| POST | `/login` | No | Login → issue JWT cookie |
-| POST | `/logout` | No | Clear JWT cookie |
-| PUT | `/change-password` | Yes | Change password (requires old password) |
-
-### Users — `/api/users`
-
-| Method | Endpoint | Auth | Description |
-|---|---|---|---|
-| GET | `/me` | Yes | Get current user profile |
-| PUT | `/me` | Yes | Update first name / last name |
-
-### Entries — `/api/entries`
-
-All entry routes require authentication.
-
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | `/` | Create entry |
-| GET | `/` | Get all entries (sorted by date desc) |
-| GET | `/:id` | Get single entry |
-| PATCH | `/:id` | Update entry |
-| DELETE | `/:id` | Delete entry |
-| GET | `/search?text=` | Full-text search |
-| POST | `/analyze` | AI mood analysis via Gemini |
-| GET | `/analytics/mood` | Mood counts (all 4 moods) |
-| GET | `/analytics/weekly?weeks=8` | Entry count per ISO week |
-| GET | `/analytics/monthly?months=6` | Entry count per calendar month |
-| GET | `/analytics/streak` | Current streak, longest streak, total active days |
-
----
-
-## Environment Variables
-
-Create a `.env` file in the `backend/` directory:
+Create a `.env` file in the `backend/` folder:
 
 ```env
 # Server
 PORT=5000
 FRONTEND_URL=http://localhost:5173
 
-# Database
-MONGO_URI=mongodb+srv://<user>:<password>@cluster.mongodb.net/daybook
+# MongoDB
+MONGO_URI=mongodb://localhost:27017/daybook
 
-# Auth
-JWT_SECRET=your_strong_jwt_secret_here
+# Redis
+REDIS_URL=redis://localhost:6379
 
-# Email — Gmail SMTP
-# Requires Gmail 2-Step Verification + App Password
-# Generate at: Google Account → Security → 2-Step Verification → App Passwords
-EMAIL_USER=your@gmail.com
-EMAIL_PASS=your_16_char_app_password
+# JWT
+JWT_SECRET=your_super_secret_jwt_key
 
-# AI — Google Gemini
-# Get your key at: https://aistudio.google.com/app/apikey
-GEMINI_API_KEY=your_gemini_api_key_here
+# Email (OTP delivery)
+EMAIL_USER=your_gmail@gmail.com
+EMAIL_PASS=your_gmail_app_password
+
+# Cloudinary (profile photo storage)
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+
+# Gemini AI (mood detection)
+GEMINI_API_KEY=your_gemini_api_key
+```
+
+> **Gmail tip:** Use an [App Password](https://myaccount.google.com/apppasswords) instead of your real Gmail password — regular passwords won't work with SMTP.
+
+> **Cloudinary:** Get your credentials from [cloudinary.com](https://cloudinary.com) → Dashboard → API Keys.
+
+Start the backend:
+
+```bash
+npm run dev
 ```
 
 ---
 
-## Getting Started
-
-### Prerequisites
-
-- Node.js >= 18
-- MongoDB Atlas account (or local MongoDB)
-- Gmail account with 2-Step Verification enabled
-- Google AI Studio account (for Gemini API key)
-
-### Installation
-
-**1. Clone the repository**
+### 3. Frontend setup
 
 ```bash
-git clone https://github.com/thenileshnishad/daybook.git
-cd daybook
-```
-
-**2. Install backend dependencies**
-
-```bash
-cd backend
-npm install
-npm install nodemailer   # email OTP sending
-```
-
-**3. Install frontend dependencies**
-
-```bash
-cd ../frontend
-npm install
-```
-
-**4. Set up environment variables**
-
-```bash
-cd ../backend
-cp .env.example .env
-# Edit .env with your actual values
-```
-
-**5. Start the development servers**
-
-```bash
-# Terminal 1 — Backend
-cd backend
-npm run dev
-
-# Terminal 2 — Frontend
 cd frontend
+npm install
+```
+
+Create a `.env` file in the `frontend/` folder:
+
+```env
+VITE_API_URL=http://localhost:5000/api
+```
+
+Start the frontend:
+
+```bash
 npm run dev
 ```
 
-**6. Open in browser**
-
-```
-Frontend: http://localhost:5173
-Backend:  http://localhost:5000
-```
+App runs at **http://localhost:5173**
 
 ---
 
-## Security Design
+## 🔒 Security Design
 
-### Client-Side Encryption
+### Client-side Encryption
+Your login password is hashed with SHA-256 in the browser to produce the AES-256 encryption key. Every entry's content is encrypted before the API request is made. The server stores and returns only ciphertext — the plaintext is never transmitted.
 
-Entry content is **encrypted in the browser before being sent to the server**, using AES via `crypto-js`. The encryption key is derived from the user's password using SHA-256.
+### Zero-Knowledge
+Even if the database were compromised, all entry content is unreadable without the user's password. The server has no way to decrypt entries.
 
-```
-User types content
-  → encryptText(content, userPassword)
-    → SHA-256(userPassword) → key
-    → AES.encrypt(content, key)
-    → ciphertext sent to backend + stored in MongoDB
-
-On load
-  → AES.decrypt(ciphertext, SHA-256(userPassword))
-    → plaintext displayed in UI
-```
-
-The server stores and returns ciphertext only. If the database is compromised, entries cannot be read without the user's password.
-
-### Password Persistence
-
-The user's plaintext password is needed at runtime for encryption/decryption. It is:
-
-1. Dispatched to Redux after login/OTP verification (in-memory)
-2. Base64-encoded and stored in `localStorage` under `_db_sp`
-3. Restored from `localStorage` on every page refresh by `Layout.jsx`
-4. Cleared from both Redux and `localStorage` on logout
-
-### OTP Security
-
-- OTPs are **never stored in plaintext** — only bcrypt hashes are stored
+### OTP Verification
+- 6-digit OTPs are generated with `crypto.randomInt` (cryptographically secure)
+- Only the bcrypt hash is stored in MongoDB — the raw OTP is never persisted
 - OTPs expire after **10 minutes**
-- Resend is rate-limited to **once per 60 seconds**, enforced server-side
-- Unverified users cannot log in until OTP is confirmed
-- Retrying signup with an existing unverified email regenerates the OTP (no duplicate users)
+- Resend is rate-limited to **once every 60 seconds**
 
-### JWT
+### LPU-Only Registration
+- Frontend: domain is checked on every keystroke after `@` — the submit button is disabled for non-`@lpu.in` emails
+- Backend: `authController` returns HTTP **403** before any DB operation if the email domain is wrong
+- Login also validates the domain
 
-- Issued as `httpOnly`, `secure`, `sameSite: None` cookies
-- 7-day expiry
-- Verified on every protected route via `authMiddleware`
+### Auth Cookies
+```
+httpOnly: true   → not accessible from JavaScript
+secure: true     → HTTPS only in production
+sameSite: None   → cross-origin (frontend ↔ backend on different ports)
+maxAge: 7 days
+```
 
 ---
 
-## Frontend Architecture
+## 📸 Profile Photo Upload
 
-### Pages and Routes
+Photos are uploaded as base64 data URIs from the browser to the backend, then stored on Cloudinary.
 
-| Route | Component | Auth Required |
+**Flow:**
+1. User picks or drags an image in the Profile modal
+2. Browser converts it to a base64 data URI (client-side preview shown instantly)
+3. On "Upload Photo", the base64 string is sent to `POST /api/users/me/photo`
+4. Backend uploads to Cloudinary with a 400×400 face-crop transformation
+5. Cloudinary URL and `public_id` are saved in MongoDB
+6. URL is returned to the frontend → Redux state updated → avatar updates everywhere instantly
+
+**Limits:** JPG / PNG / WEBP / GIF · max 5 MB
+
+---
+
+## 📄 API Reference
+
+### Auth — `/api/auth`
+| Method | Endpoint | Description |
 |---|---|---|
-| `/` | `Home.jsx` | No |
-| `/login` | `Login.jsx` | No (redirects if logged in) |
-| `/signup` | `Signup.jsx` | No (redirects if logged in) |
-| `/entries` | `Entries.jsx` | Yes |
-| `/dashboard` | `Dashboard.jsx` | Yes |
-| `/about` | `About.jsx` | No |
-| `*` | `NotFound.jsx` | No |
+| POST | `/signup` | Register (LPU email only) — sends OTP |
+| POST | `/verify-otp` | Verify OTP and activate account |
+| POST | `/resend-otp` | Resend OTP (60 s cooldown) |
+| POST | `/login` | Login with email + password |
+| POST | `/logout` | Clear auth cookie |
+| PUT | `/change-password` | Change password (authenticated) |
 
-### Signup Flow
-
-```
-Step 1 — Form
-  User fills firstName, lastName, email, password
-  → POST /api/auth/signup
-  → Backend creates unverified user, sends OTP email
-  → Frontend stores email in Redux (pendingEmail)
-  → Shows OTP input screen
-
-Step 2 — OTP Verification
-  User enters 6-digit code (individual digit boxes, paste-compatible)
-  → POST /api/auth/verify-otp { email, otp }
-  → Backend validates hash + expiry → marks isVerified: true → issues JWT
-  → Frontend dispatches userInfo + userPassword → saves to localStorage
-  → Navigates to home
-```
-
-### Entry Encryption Flow
-
-```
-Add Entry
-  User writes content (plaintext)
-  → AI Analyze button (optional): POST /api/entries/analyze → mood auto-filled
-  → Save: encryptText(content, userPassword) → POST /api/entries
-
-Display Entry
-  Fetch entries from API (ciphertext)
-  → decryptText(content, userPassword) → plaintext shown in UI
-  → If userPassword is null (refresh): restored from localStorage by Layout.jsx
-
-Edit Entry
-  Load: decryptText(storedContent, userPassword) → shown in form
-  Save: encryptText(editedContent, userPassword) → PATCH /api/entries/:id
-```
-
----
-
-## State Management
-
-### Redux Store Shape
-
-```js
-{
-  user: {
-    data: null,          // API response: { message, data: { _id, email, firstName, lastName } }
-    userPassword: null,  // Plaintext password — used as AES encryption key
-    pendingEmail: null,  // Held during signup step 1 → step 2 transition
-  },
-  apiSlice: { ... }      // RTK Query cache for all API responses
-}
-```
-
-### RTK Query Hooks
-
-**Users API**
-
-| Hook | Method | Endpoint |
+### Users — `/api/users`
+| Method | Endpoint | Description |
 |---|---|---|
-| `useSignupMutation` | POST | `/auth/signup` |
-| `useVerifyOtpMutation` | POST | `/auth/verify-otp` |
-| `useResendOtpMutation` | POST | `/auth/resend-otp` |
-| `useLoginMutation` | POST | `/auth/login` |
-| `useLogoutMutation` | POST | `/auth/logout` |
-| `useProfileQuery` | GET | `/users/me` |
-| `useUpdateProfileMutation` | PUT | `/users/me` |
-| `useChangePasswordMutation` | PUT | `/auth/change-password` |
+| GET | `/me` | Fetch profile |
+| PUT | `/me` | Update name |
+| POST | `/me/photo` | Upload profile photo (base64) |
+| DELETE | `/me/photo` | Remove profile photo |
 
-**Entries API**
-
-| Hook | Method | Endpoint |
+### Entries — `/api/entries`
+| Method | Endpoint | Description |
 |---|---|---|
-| `useAddEntryMutation` | POST | `/entries` |
-| `useGetEntriesQuery` | GET | `/entries` |
-| `useGetEntryQuery` | GET | `/entries/:id` |
-| `useUpdateEntryMutation` | PATCH | `/entries/:id` |
-| `useDeleteEntryMutation` | DELETE | `/entries/:id` |
-| `useSearchEntryQuery` | GET | `/entries/search` |
-| `useAnalyzeMoodMutation` | POST | `/entries/analyze` |
-| `useGetMoodAnalyticsQuery` | GET | `/entries/analytics/mood` |
-| `useGetEntriesPerWeekQuery` | GET | `/entries/analytics/weekly` |
-| `useGetEntriesPerMonthQuery` | GET | `/entries/analytics/monthly` |
-| `useGetWritingStreakQuery` | GET | `/entries/analytics/streak` |
+| GET | `/` | Get all entries |
+| POST | `/` | Create entry |
+| GET | `/:id` | Get single entry |
+| PUT | `/:id` | Update entry |
+| DELETE | `/:id` | Delete entry |
+| GET | `/search` | Search entries (mood, date, keyword) |
 
 ---
 
-## Author
+## 🤝 Contributing & Contact
 
-**Koushik Ghosh**
+Built by **Koushik Ghosh** — LPU Student & Full-Stack Developer.
+
+Have a project idea or want to collaborate? Visit the **About** page in the app to send a message directly.
 
 ---
 
-*Start your journaling journey with DayBook — where your memories are secure, personal, and always accessible.*
+## 📜 License
+
+This project is open source and available under the [MIT License](LICENSE).
