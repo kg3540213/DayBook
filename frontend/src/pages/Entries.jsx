@@ -243,13 +243,6 @@ const Entries = () => {
 
   // ── Normal render ─────────────────────────────────────────────────
   return (
-    /*
-      min-h ensures the page body always fills at least the visible
-      viewport (minus navbar ~64px and footer ~52px), so the footer
-      never floats up when there are only 1–3 entries on screen.
-      flex + flex-col lets the grid grow naturally while pb-24 keeps
-      the last row clear of the fixed FAB button.
-    */
     <div
       className="flex flex-col pb-24"
       style={{ minHeight: "calc(100dvh - 64px - 52px)" }}

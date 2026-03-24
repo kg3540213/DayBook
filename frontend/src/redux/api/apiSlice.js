@@ -6,8 +6,9 @@ const apiSlice = createApi({
     baseUrl: `${import.meta.env.VITE_BACKEND_URL}/api`,
     credentials: "include",
   }),
-  tagTypes: ["User", "Entries"],
-  endpoints: (builder) => ({}),
+  // Added SharedJournals + SharedJournal tag types for cache invalidation
+  tagTypes: ["User", "Entries", "SharedJournals", "SharedJournal"],
+  endpoints: () => ({}),
 });
 
 export default apiSlice;

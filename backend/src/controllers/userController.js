@@ -44,9 +44,7 @@ const updateProfile = async (req, res) => {
   }
 };
 
-// ── UPLOAD PROFILE PHOTO ──────────────────────────────────────────
-// Expects a base64 data URI in req.body.image
-// e.g. "data:image/jpeg;base64,/9j/4AAQSkZJRgAB..."
+
 const uploadProfilePhoto = async (req, res) => {
   const loggedUser = req.user;
   const { image }  = req.body;
@@ -69,10 +67,6 @@ const uploadProfilePhoto = async (req, res) => {
       }
     }
 
-    // Upload to Cloudinary
-    // - folder: keeps uploads organised under daybook/profiles
-    // - transformation: crops to 400×400, prioritises face detection,
-    //   auto quality + format for optimal delivery
     const result = await cloudinary.uploader.upload(image, {
       folder:         "daybook/profiles",
       transformation: [
@@ -93,6 +87,7 @@ const uploadProfilePhoto = async (req, res) => {
         profilePhoto:         result.secure_url,
         profilePhotoPublicId: result.public_id,
       },
+      // return the updated document instead of the old one.
       { new: true }
     );
 

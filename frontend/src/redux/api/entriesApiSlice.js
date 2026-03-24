@@ -31,11 +31,6 @@ const entriesApiSlice = apiSlice.injectEndpoints({
     }),
 
     // ── Advanced search ──────────────────────────────────────────
-    // Accepts a filters object with any combination of:
-    //   { text, mood, dateFrom, dateTo, page, limit }
-    // All fields are optional — at least one filter must be non-empty
-    // (validated on the backend).
-    // Returns: { data, pagination: { total, page, limit, totalPages } }
     searchEntry: builder.query({
       query: (filters = {}) => {
         const { text, mood, dateFrom, dateTo, page, limit } = filters;

@@ -31,13 +31,15 @@ app.use(
 );
 
 // ── Routes ────────────────────────────────────────────────────────
-const authRoutes = require("./routes/authRoutes");
-const userRoutes = require("./routes/userRoutes");
-const entryRoutes = require("./routes/entryRoutes");
+const authRoutes          = require("./routes/authRoutes");
+const userRoutes          = require("./routes/userRoutes");
+const entryRoutes         = require("./routes/entryRoutes");
+const sharedJournalRoutes = require("./routes/sharedJournalRoutes");
 
-app.use("/api/auth", authRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/entries", entryRoutes);
+app.use("/api/auth",            authRoutes);
+app.use("/api/users",           userRoutes);
+app.use("/api/entries",         entryRoutes);
+app.use("/api/shared-journals", sharedJournalRoutes);  // ← NEW
 
 // ── Serve Frontend (IMPORTANT) ────────────────────────────────────
 app.use(express.static(path.join(__dirname, "../../frontend/dist")));
