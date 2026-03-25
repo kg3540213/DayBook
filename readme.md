@@ -193,9 +193,9 @@ REDIS_URL=redis://localhost:6379
 # JWT
 JWT_SECRET=your_super_secret_jwt_key
 
-# Email (OTP delivery)
-EMAIL_USER=your_gmail@gmail.com
-EMAIL_PASS=your_gmail_app_password
+# Email (OTP delivery via Brevo)
+BREVO_API_KEY=your_brevo_api_key
+EMAIL_USER=noreply@yourdomain.com
 
 # Cloudinary (profile photo storage)
 CLOUDINARY_CLOUD_NAME=your_cloud_name
@@ -206,7 +206,7 @@ CLOUDINARY_API_SECRET=your_api_secret
 GEMINI_API_KEY=your_gemini_api_key
 ```
 
-> **Gmail tip:** Use an [App Password](https://myaccount.google.com/apppasswords) instead of your real Gmail password — regular passwords won't work with SMTP.
+> **Brevo setup:** Get your API key from [brevo.com](https://brevo.com) → SMTP & API → API Keys. The EMAIL_USER should be a verified sender email in your Brevo account.
 
 > **Cloudinary:** Get your credentials from [cloudinary.com](https://cloudinary.com) → Dashboard → API Keys.
 

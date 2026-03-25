@@ -1,27 +1,22 @@
-const nodemailer = require("nodemailer");
+const axios = require("axios");
 
-const transporter = nodemailer.createTransport({
-  host: "smtp-relay.brevo.com",
-  port: 587,
-  secure: false, // Use SSL instead of TLS
-  auth: {
-    user: process.env.EMAIL_USER,
-    pass: process.env.EMAIL_PASS,
-  },
-  // Add connection timeout and retry settings
-  connectionTimeout: 10000, // 10 seconds
-  greetingTimeout: 10000,
-  socketTimeout: 10000,
-});
+const BREVO_API_KEY = process.env.BREVO_API_KEY || process.env.EMAIL_PASS; // Fallback to EMAIL_PASS if BREVO_API_KEY not set
+const BREVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 
 // ── OTP verification email ────────────────────────────────────────
 const sendOtpEmail = async (toEmail, otp, firstName) => {
   try {
-    const mailOptions = {
-      from: `"DayBook" <${process.env.EMAIL_USER}>`,
-      to: toEmail,
+    const emailData = {
+      sender: {
+        name: "DayBook",
+        email: process.env.EMAIL_USER || "noreply@daybook.com"
+      },
+      to: [{
+        email: toEmail,
+        name: firstName
+      }],
       subject: "Your DayBook Verification Code",
-      html: `
+      htmlContent: `
         <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background: #f9fafb; border-radius: 12px;">
           <h2 style="margin: 0 0 8px; color: #111;">Hi ${firstName} 👋</h2>
           <p style="color: #555; margin: 0 0 24px;">
@@ -37,19 +32,25 @@ const sendOtpEmail = async (toEmail, otp, firstName) => {
             This code expires in <strong>10 minutes</strong>. If you didn't create a DayBook account, you can safely ignore this email.
           </p>
         </div>
-      `,
+      `
     };
 
-    const result = await transporter.sendMail(mailOptions);
+    const response = await axios.post(BREVO_API_URL, emailData, {
+      headers: {
+        "api-key": BREVO_API_KEY,
+        "Content-Type": "application/json"
+      },
+      timeout: 30000 // 30 seconds timeout
+    });
+
     console.log("Email sent successfully to:", toEmail);
-    return result;
+    return response.data;
   } catch (error) {
     console.error("Email sending error details:", {
       to: toEmail,
       error: error.message,
       code: error.code,
-      response: error.response,
-      stack: error.stack
+      response: error.response?.data
     });
     throw error;
   }
@@ -69,11 +70,16 @@ const sendSharedJournalInviteEmail = async (
   const acceptUrl  = `${frontendUrl}/shared-journals/invite/${inviteToken}/accept`;
   const declineUrl = `${frontendUrl}/shared-journals/invite/${inviteToken}/decline`;
 
-  const mailOptions = {
-    from: `"DayBook" <${process.env.EMAIL_USER}>`,
-    to: toEmail,
+  const emailData = {
+    sender: {
+      name: "DayBook",
+      email: process.env.EMAIL_USER || "noreply@daybook.com"
+    },
+    to: [{
+      email: toEmail
+    }],
     subject: `${inviterFirstName} invited you to a shared journal on DayBook`,
-    html: `
+    htmlContent: `
       <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 24px; background: #f9fafb; border-radius: 12px;">
         <h2 style="margin: 0 0 8px; color: #111;">You've been invited! 📓</h2>
         <p style="color: #555; margin: 0 0 20px;">
@@ -105,19 +111,26 @@ const sendSharedJournalInviteEmail = async (
           If you don't have a DayBook account, <a href="${frontendUrl}/signup" style="color: #6366f1;">sign up first</a>.
         </p>
       </div>
-    `,
+    `
   };
 
   try {
-    const result = await transporter.sendMail(mailOptions);
+    const response = await axios.post(BREVO_API_URL, emailData, {
+      headers: {
+        "api-key": BREVO_API_KEY,
+        "Content-Type": "application/json"
+      },
+      timeout: 30000 // 30 seconds timeout
+    });
+
     console.log("Invite email sent successfully to:", toEmail);
-    return result;
+    return response.data;
   } catch (error) {
     console.error("Email sending error details:", {
       to: toEmail,
       error: error.message,
       code: error.code,
-      response: error.response,
+      response: error.response?.data
     });
     throw error;
   }
@@ -126,13 +139,23 @@ const sendSharedJournalInviteEmail = async (
 // ── Verify email configuration ────────────────────────────────────
 const verifyEmailConfig = async () => {
   try {
-    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-      console.warn("⚠️  Email credentials not configured. Signup OTP emails will fail.");
+    if (!BREVO_API_KEY) {
+      console.warn("⚠️  Brevo API key not configured. Email sending will fail.");
       return false;
     }
-    await transporter.verify();
-    console.log("✓ Email service verified and ready!");
-    return true;
+
+    // Test the API key with a simple request
+    const testResponse = await axios.get("https://api.brevo.com/v3/account", {
+      headers: {
+        "api-key": BREVO_API_KEY
+      },
+      timeout: 10000
+    });
+
+    if (testResponse.status === 200) {
+      console.log("✓ Email service verified and ready!");
+      return true;
+    }
   } catch (error) {
     console.error("❌ Email service verification failed:", error.message);
     return false;
