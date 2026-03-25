@@ -9,6 +9,7 @@ const connectDB = require("./config/database");
 const redis = require("./config/redis");
 const cookieParser = require("cookie-parser");
 const cors = require("cors");
+const { verifyEmailConfig } = require("./services/EmailService");
 
 const app = express();
 
@@ -65,6 +66,9 @@ let server;
 connectDB()
   .then(() => {
     console.log("Database connected successfully!");
+    
+    // Verify email configuration
+    verifyEmailConfig();
 
     server = app.listen(process.env.PORT, () => {
       console.log(`Server is running on port ${process.env.PORT}!`);

@@ -1,7 +1,9 @@
 const nodemailer = require("nodemailer");
 
 const transporter = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp-relay.brevo.com",
+  port: 587,
+  secure: false, // Use TLS, not SSL (more reliable on Render)
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
@@ -102,7 +104,35 @@ const sendSharedJournalInviteEmail = async (
     `,
   };
 
-  await transporter.sendMail(mailOptions);
+  try {
+    const result = await transporter.sendMail(mailOptions);
+    console.log("Invite email sent successfully to:", toEmail);
+    return result;
+  } catch (error) {
+    console.error("Email sending error details:", {
+      to: toEmail,
+      error: error.message,
+      code: error.code,
+      response: error.response,
+    });
+    throw error;
+  }
 };
 
-module.exports = { sendOtpEmail, sendSharedJournalInviteEmail };
+// ── Verify email configuration ────────────────────────────────────
+const verifyEmailConfig = async () => {
+  try {
+    if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+      console.warn("⚠️  Email credentials not configured. Signup OTP emails will fail.");
+      return false;
+    }
+    await transporter.verify();
+    console.log("✓ Email service verified and ready!");
+    return true;
+  } catch (error) {
+    console.error("❌ Email service verification failed:", error.message);
+    return false;
+  }
+};
+
+module.exports = { sendOtpEmail, sendSharedJournalInviteEmail, verifyEmailConfig };
