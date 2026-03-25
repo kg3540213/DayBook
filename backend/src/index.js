@@ -25,7 +25,7 @@ app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL,
+    origin: [process.env.FRONTEND_URL, "https://lpudaybook.onrender.com"],
     credentials: true,
   })
 );
