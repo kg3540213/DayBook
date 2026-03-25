@@ -72,7 +72,12 @@ const signup = async (req, res) => {
       existingUser.otpSentAt = now;
       await existingUser.save();
 
-      await sendOtpEmail(email, otp, firstName);
+      try {
+        await sendOtpEmail(email, otp, firstName);
+      } catch (emailError) {
+        console.error("Email sending failed:", emailError);
+        return res.status(500).json({ message: "Failed to send verification email. Please try again." });
+      }
 
       return res.status(200).json({
         message: "A new verification code has been sent to your email.",
@@ -94,7 +99,14 @@ const signup = async (req, res) => {
       otpSentAt: now,
     });
 
-    await sendOtpEmail(email, otp, firstName);
+    try {
+      await sendOtpEmail(email, otp, firstName);
+    } catch (emailError) {
+      console.error("Email sending failed:", emailError);
+      // Delete the user since email failed
+      await User.findOneAndDelete({ email });
+      return res.status(500).json({ message: "Failed to send verification email. Please try again." });
+    }
 
     res.status(201).json({
       message: "Account created! Please check your LPU email for the verification code.",
@@ -193,7 +205,12 @@ const resendOtp = async (req, res) => {
     user.otpSentAt = now;
     await user.save();
 
-    await sendOtpEmail(email, otp, user.firstName);
+    try {
+      await sendOtpEmail(email, otp, user.firstName);
+    } catch (emailError) {
+      console.error("Email sending failed:", emailError);
+      return res.status(500).json({ message: "Failed to send verification email. Please try again." });
+    }
 
     res.status(200).json({
       message: "A new verification code has been sent to your email.",
