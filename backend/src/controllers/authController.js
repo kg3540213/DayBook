@@ -62,7 +62,7 @@ const signup = async (req, res) => {
       const otpHash = await bcrypt.hash(otp, 10);
       const now = new Date();
 
-      console.log(otp, otpHash);
+      // console.log(otp, otpHash);
 
       existingUser.password  = await bcrypt.hash(password, 10);
       existingUser.firstName = firstName;
