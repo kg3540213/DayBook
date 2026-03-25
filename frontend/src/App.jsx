@@ -4,14 +4,15 @@ import { Provider } from "react-redux";
 import store from "./redux/store";
 import { ToastContainer } from "react-toastify";
 
-import Layout          from "./components/Layout";
-import Home            from "./pages/Home";
-import Login           from "./pages/Login";
-import Signup          from "./pages/Signup";
-import Entries         from "./pages/Entries";
-import Dashboard       from "./pages/Dashboard";
-import About           from "./pages/About";
-import NotFound        from "./pages/NotFound";
+import Layout              from "./components/Layout";
+import Home                from "./pages/Home";
+import Login               from "./pages/Login";
+import Signup              from "./pages/Signup";
+import Entries             from "./pages/Entries";
+import Dashboard           from "./pages/Dashboard";
+import About               from "./pages/About";
+import NotFound            from "./pages/NotFound";
+import CalendarView        from "./pages/CalendarView";
 import SharedJournals      from "./pages/SharedJournals";
 import SharedJournalDetail from "./pages/SharedJournalDetail";
 import InviteHandler       from "./pages/InviteHandler";
@@ -24,16 +25,16 @@ const App = () => {
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<Home />} />
-            <Route path="login"    element={<Login />} />
-            <Route path="signup"   element={<Signup />} />
-            <Route path="entries"  element={<Entries />} />
+            <Route path="login"     element={<Login />} />
+            <Route path="signup"    element={<Signup />} />
+            <Route path="entries"   element={<Entries />} />
+            <Route path="calendar"  element={<CalendarView />} />
             <Route path="dashboard" element={<Dashboard />} />
-            <Route path="about"    element={<About />} />
+            <Route path="about"     element={<About />} />
 
-            {/* ── Shared Journals ──────────────────────────────── */}
-            <Route path="shared-journals"              element={<SharedJournals />} />
-            <Route path="shared-journals/:journalId"   element={<SharedJournalDetail />} />
-            {/* Invite accept/decline page — token-based */}
+            {/* ── Shared Journals ─────────────────────────────── */}
+            <Route path="shared-journals"            element={<SharedJournals />} />
+            <Route path="shared-journals/:journalId" element={<SharedJournalDetail />} />
             <Route
               path="shared-journals/invite/:token"
               element={<InviteHandler />}

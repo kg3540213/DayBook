@@ -13,17 +13,46 @@ const entrySchema = new mongoose.Schema(
       type: String,
       enum: ["🙂", "😔", "😡", "😐"],
     },
+    // content is stored as AES-encrypted ciphertext (plaintext for shared entries)
     content: String,
+
+    // ── Rich text support ─────────────────────────────────────────
+    // contentFormat: "plain" (legacy) | "html" (rich text, encrypted)
+    contentFormat: {
+      type:    String,
+      enum:    ["plain", "html"],
+      default: "plain",
+    },
+
+    // ── Tags ──────────────────────────────────────────────────────
+    // Free-form string tags, max 10, each max 30 chars
+    tags: {
+      type:    [String],
+      default: [],
+      validate: {
+        validator: (v) => v.length <= 10,
+        message:   "Maximum 10 tags per entry.",
+      },
+    },
+
+    // ── Pinned ────────────────────────────────────────────────────
+    isPinned: {
+      type:    Boolean,
+      default: false,
+    },
+
+    // ── Template ──────────────────────────────────────────────────
+    // Which template was used when creating this entry (for analytics)
+    templateUsed: {
+      type:    String,
+      default: null,
+    },
   },
-  // Automatically add and manage createdAt and updatedAt fields in your database document.
   { timestamps: true }
 );
 
 // ------------------------------------------------------------------
-// TEXT INDEX
-// Enables the $text operator for full-text search.
-// title weight 2 → title matches rank higher than content matches.
-// Only one text index is allowed per collection.
+// TEXT INDEX — title + content for full-text search
 // ------------------------------------------------------------------
 entrySchema.index(
   { title: "text", content: "text" },
@@ -31,17 +60,22 @@ entrySchema.index(
 );
 
 // ------------------------------------------------------------------
-// COMPOUND INDEX
-// Optimises filter-only queries (mood + date range) and date sorting.
-// Field order matters:
-//   createdBy  → equality filter always present (narrows to user's docs)
-//   date       → range filter + sort (-1 = descending by default)
-//   mood       → equality filter applied after the range scan
+// COMPOUND INDEX — user + date + mood filter queries
 // ------------------------------------------------------------------
 entrySchema.index(
   { createdBy: 1, date: -1, mood: 1 },
   { name: "entry_filter_index" }
 );
+
+// ------------------------------------------------------------------
+// TAGS INDEX — fast tag-based filtering
+// ------------------------------------------------------------------
+entrySchema.index({ createdBy: 1, tags: 1 }, { name: "entry_tags_index" });
+
+// ------------------------------------------------------------------
+// PINNED INDEX — fast pinned-first sorting
+// ------------------------------------------------------------------
+entrySchema.index({ createdBy: 1, isPinned: -1, date: -1 }, { name: "entry_pinned_index" });
 
 const entryModel = mongoose.model("Entry", entrySchema);
 

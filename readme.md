@@ -14,6 +14,8 @@ A private, secure journaling app built exclusively for **LPU (Lovely Professiona
 - **🔍 Smart Search** — Search across titles and encrypted content by keyword, mood, or date range
 - **🖼️ Profile Photo** — Upload a profile picture stored on Cloudinary; displayed on the home page and navbar
 - **📄 Pagination** — Entries page shows 6 entries per page (3 per row) with Prev/Next navigation
+- **📖 Shared Journals** — Create shared journals with friends, invite via email, and collaborate on entries
+- **👥 Collaborative Entries** — Add entries to shared journals that all participants can view and edit
 - **🎓 LPU-Only Access** — Only `@lpu.in` email addresses can register. Invalid domains are rejected instantly on both the frontend and backend
 - **✉️ OTP Verification** — Email-based 6-digit OTP sent on signup. Unverified accounts cannot log in
 - **🔑 JWT Auth** — Secure `httpOnly` cookie-based JWT authentication with 7-day expiry
@@ -49,60 +51,100 @@ A private, secure journaling app built exclusively for **LPU (Lovely Professiona
 
 ```
 daybook/
-├── frontend/
-│   ├── public/
+├── package.json
+├── readme.md
+├── backend/
 │   └── src/
-│       ├── components/
-│       │   ├── auth/
-│       │   │   ├── Profile.jsx       # Profile info + photo upload
-│       │   │   ├── Password.jsx      # Change password
-│       │   │   └── Logout.jsx
-│       │   ├── entry/
-│       │   │   ├── EntryCard.jsx
-│       │   │   ├── AddEntry.jsx
-│       │   │   └── ...
-│       │   ├── navbar/
-│       │   │   └── NavProfile.jsx    # Navbar avatar + dropdown
-│       │   ├── Footer.jsx
-│       │   └── Loader.jsx
-│       ├── pages/
-│       │   ├── Home.jsx              # Landing + profile photo display
-│       │   ├── About.jsx             # About + LinkedIn + contact form
-│       │   ├── Entries.jsx           # Paginated entries grid
-│       │   ├── Dashboard.jsx
-│       │   ├── Signup.jsx            # LPU email validation + OTP step
-│       │   └── Login.jsx
-│       ├── redux/
-│       │   ├── api/
-│       │   │   ├── apiSlice.js
-│       │   │   ├── usersApiSlice.js  # Auth + profile + photo endpoints
-│       │   │   └── entriesApiSlice.js
-│       │   └── features/
-│       │       └── userSlice.js      # User state + setProfilePhoto action
+│       ├── index.js
+│       ├── config/
+│       │   ├── cache.js
+│       │   ├── cloudinary.js
+│       │   ├── database.js
+│       │   └── redis.js
+│       ├── controllers/
+│       │   ├── authController.js
+│       │   ├── entryController.js
+│       │   ├── sharedJournalController.js
+│       │   └── userController.js
+│       ├── middleware/
+│       │   ├── authMiddleware.js
+│       │   └── rateLimiter.js
+│       ├── models/
+│       │   ├── entryModel.js
+│       │   ├── sharedEntryModel.js
+│       │   ├── sharedJournalModel.js
+│       │   └── userModel.js
+│       ├── routes/
+│       │   ├── authRoutes.js
+│       │   ├── entryRoutes.js
+│       │   ├── sharedJournalRoutes.js
+│       │   └── userRoutes.js
+│       ├── services/
+│       │   ├── EmailService.js
+│       │   └── geminiService.js
 │       └── utils/
-│           ├── crypto.js             # AES-256 encrypt/decrypt helpers
-│           └── sessionPassword.js
-│
-└── backend/
+│           └── generateToken.js
+└── frontend/
+    ├── eslint.config.js
+    ├── index.html
+    ├── package.json
+    ├── vite.config.js
+    ├── public/
     └── src/
-        ├── config/
-        │   ├── database.js
-        │   ├── redis.js
-        │   └── cloudinary.js         # Cloudinary SDK config
-        ├── controllers/
-        │   ├── authController.js     # Signup (LPU check), OTP, login, logout
-        │   └── userController.js     # Profile view/update + photo upload/delete
-        ├── middleware/
-        │   └── authMiddleware.js
-        ├── models/
-        │   └── userModel.js          # User schema with profilePhoto fields
-        ├── routes/
-        │   ├── authRoutes.js
-        │   ├── userRoutes.js         # GET/PUT /me, POST/DELETE /me/photo
-        │   └── entryRoutes.js
-        ├── services/
-        │   └── EmailService.js
-        └── index.js                  # Express app entry point (10mb body limit)
+        ├── App.css
+        ├── App.jsx
+        ├── main.jsx
+        ├── assets/
+        ├── components/
+        │   ├── Footer.jsx
+        │   ├── Layout.jsx
+        │   ├── Loader.jsx
+        │   ├── ModalLayout.jsx
+        │   ├── ThemeController.jsx
+        │   ├── auth/
+        │   │   ├── Logout.jsx
+        │   │   ├── Password.jsx
+        │   │   └── Profile.jsx
+        │   ├── entry/
+        │   │   ├── AddEntry.jsx
+        │   │   ├── DeleteEntry.jsx
+        │   │   ├── EditEntry.jsx
+        │   │   ├── EntryCard.jsx
+        │   │   └── ReadMore.jsx
+        │   ├── navbar/
+        │   │   ├── Navbar.jsx
+        │   │   ├── NavLinks.jsx
+        │   │   ├── NavProfile.jsx
+        │   │   └── SearchBox.jsx
+        │   └── shared/
+        │       ├── AddSharedEntry.jsx
+        │       ├── CreateSharedJournal.jsx
+        │       ├── SharedEntryCard.jsx
+        │       └── SharedJournalCard.jsx
+        ├── pages/
+        │   ├── About.jsx
+        │   ├── Analytics.jsx
+        │   ├── Dashboard.jsx
+        │   ├── Entries.jsx
+        │   ├── Home.jsx
+        │   ├── InviteHandler.jsx
+        │   ├── Login.jsx
+        │   ├── NotFound.jsx
+        │   ├── SharedJournalDetail.jsx
+        │   ├── SharedJournals.jsx
+        │   └── Signup.jsx
+        ├── redux/
+        │   ├── store.js
+        │   ├── api/
+        │   │   ├── apiSlice.js
+        │   │   ├── entriesApiSlice.js
+        │   │   ├── sharedJournalApiSlice.js
+        │   │   └── usersApiSlice.js
+        │   └── features/
+        │       └── userSlice.js
+        └── utils/
+            ├── crypto.js
+            └── sessionPassword.js
 ```
 
 ---
@@ -273,8 +315,26 @@ Photos are uploaded as base64 data URIs from the browser to the backend, then st
 | PUT | `/:id` | Update entry |
 | DELETE | `/:id` | Delete entry |
 | GET | `/search` | Search entries (mood, date, keyword) |
+| POST | `/analyze` | Analyze entry mood with AI |
+| GET | `/export` | Export entries (JSON/CSV) |
+| GET | `/analytics/mood` | Get mood analytics |
+| GET | `/analytics/weekly` | Get weekly activity |
+| GET | `/analytics/monthly` | Get monthly activity |
+| GET | `/analytics/streak` | Get writing streak |
 
----
+### Shared Journals — `/api/shared-journals`
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/` | Get my shared journals |
+| POST | `/` | Create shared journal |
+| GET | `/:journalId` | Get shared journal details |
+| DELETE | `/:journalId` | Delete shared journal |
+| POST | `/:journalId/entries` | Add entry to shared journal |
+| PATCH | `/entries/:entryId` | Update shared entry |
+| DELETE | `/entries/:entryId` | Delete shared entry |
+| GET | `/invite/:token` | Get invite information |
+| POST | `/invite/:token/accept` | Accept journal invite |
+| POST | `/invite/:token/decline` | Decline journal invite |
 
 ## 🤝 Contributing & Contact
 

@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
-// Mood options — must match the backend VALID_MOODS list exactly
 const MOOD_OPTIONS = [
   { value: "",   label: "All moods" },
   { value: "🙂", label: "🙂 Happy"  },
@@ -10,54 +9,36 @@ const MOOD_OPTIONS = [
   { value: "😐", label: "😐 Neutral"},
 ];
 
-// SearchBox renders in two modes:
-//   compact  — single text input + Search button (navbar, default)
-//   expanded — full panel with mood + date filters (sidebar drawer)
-//
-// The `expanded` prop switches between the two.
-// `toggle` closes the mobile drawer when provided.
 const SearchBox = ({ toggle, expanded = false }) => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
-  // Initialise from current URL so the fields are pre-filled on the
-  // Entries page when the user opens the sidebar to refine filters.
   const [text,     setText]     = useState(searchParams.get("search")   ?? "");
   const [mood,     setMood]     = useState(searchParams.get("mood")     ?? "");
   const [dateFrom, setDateFrom] = useState(searchParams.get("dateFrom") ?? "");
   const [dateTo,   setDateTo]   = useState(searchParams.get("dateTo")   ?? "");
+  const [tag,      setTag]      = useState(searchParams.get("tag")      ?? "");
 
   const handleSubmit = (e) => {
     e.preventDefault();
-
     const params = new URLSearchParams();
-
-    // Only append params that have a value — keeps URLs clean
-    if (text.trim())     params.set("search",   text.trim());
-    if (mood)            params.set("mood",      mood);
-    if (dateFrom)        params.set("dateFrom",  dateFrom);
-    if (dateTo)          params.set("dateTo",    dateTo);
-    // Always reset to page 1 when filters change
+    if (text.trim())    params.set("search",   text.trim());
+    if (mood)           params.set("mood",      mood);
+    if (dateFrom)       params.set("dateFrom",  dateFrom);
+    if (dateTo)         params.set("dateTo",    dateTo);
+    if (tag.trim())     params.set("tag",       tag.trim().toLowerCase());
     params.set("page", "1");
-
-    const hasAnyFilter = text.trim() || mood || dateFrom || dateTo;
-
-    // Navigate to /entries with the new search params.
-    // If nothing was filled in, just go to the plain entries list.
+    const hasAnyFilter = text.trim() || mood || dateFrom || dateTo || tag.trim();
     navigate(hasAnyFilter ? `/entries?${params.toString()}` : "/entries");
     toggle && toggle();
   };
 
   const handleClear = () => {
-    setText("");
-    setMood("");
-    setDateFrom("");
-    setDateTo("");
+    setText(""); setMood(""); setDateFrom(""); setDateTo(""); setTag("");
     navigate("/entries");
     toggle && toggle();
   };
 
-  // ── Compact mode (navbar) ────────────────────────────────────────
   if (!expanded) {
     return (
       <form onSubmit={handleSubmit}>
@@ -70,10 +51,7 @@ const SearchBox = ({ toggle, expanded = false }) => {
             onChange={(e) => setText(e.target.value)}
             autoComplete="off"
           />
-          <button
-            type="submit"
-            className="btn join-item rounded-r-full bg-base-100"
-          >
+          <button type="submit" className="btn join-item rounded-r-full bg-base-100">
             Search
           </button>
         </div>
@@ -81,10 +59,8 @@ const SearchBox = ({ toggle, expanded = false }) => {
     );
   }
 
-  // ── Expanded mode (sidebar drawer) ──────────────────────────────
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-3 mb-4">
-      {/* Keyword */}
       <div>
         <label className="label label-text text-xs">Keyword</label>
         <input
@@ -96,8 +72,16 @@ const SearchBox = ({ toggle, expanded = false }) => {
           autoComplete="off"
         />
       </div>
-
-      {/* Mood */}
+      <div>
+        <label className="label label-text text-xs">Tag</label>
+        <input
+          className="input input-sm w-full bg-base-100"
+          placeholder="e.g. college, gratitude"
+          value={tag}
+          onChange={(e) => setTag(e.target.value)}
+          autoComplete="off"
+        />
+      </div>
       <div>
         <label className="label label-text text-xs">Mood</label>
         <select
@@ -106,47 +90,23 @@ const SearchBox = ({ toggle, expanded = false }) => {
           onChange={(e) => setMood(e.target.value)}
         >
           {MOOD_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>
-              {o.label}
-            </option>
+            <option key={o.value} value={o.value}>{o.label}</option>
           ))}
         </select>
       </div>
-
-      {/* Date range */}
       <div className="flex gap-2">
         <div className="flex-1">
           <label className="label label-text text-xs">From</label>
-          <input
-            type="date"
-            className="input input-sm w-full bg-base-100"
-            value={dateFrom}
-            onChange={(e) => setDateFrom(e.target.value)}
-          />
+          <input type="date" className="input input-sm w-full bg-base-100" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
         </div>
         <div className="flex-1">
           <label className="label label-text text-xs">To</label>
-          <input
-            type="date"
-            className="input input-sm w-full bg-base-100"
-            value={dateTo}
-            onChange={(e) => setDateTo(e.target.value)}
-          />
+          <input type="date" className="input input-sm w-full bg-base-100" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
         </div>
       </div>
-
-      {/* Actions */}
       <div className="flex gap-2 mt-1">
-        <button type="submit" className="btn btn-primary btn-sm flex-1">
-          Search
-        </button>
-        <button
-          type="button"
-          onClick={handleClear}
-          className="btn btn-ghost btn-sm flex-1"
-        >
-          Clear
-        </button>
+        <button type="submit" className="btn btn-primary btn-sm flex-1">Search</button>
+        <button type="button" onClick={handleClear} className="btn btn-ghost btn-sm flex-1">Clear</button>
       </div>
     </form>
   );

@@ -3,9 +3,23 @@ const validator = require("validator");
 const { analyzeMood } = require("../services/geminiService");
 const cache    = require("../config/cache");
 
+// ── Helpers ───────────────────────────────────────────────────────
+
+// Sanitise a tags array: trim, lowercase, dedupe, max 10, max 30 chars each
+const sanitiseTags = (raw) => {
+  if (!Array.isArray(raw)) return [];
+  return [
+    ...new Set(
+      raw
+        .map((t) => String(t).trim().toLowerCase().slice(0, 30))
+        .filter(Boolean)
+    ),
+  ].slice(0, 10);
+};
+
 // ─── CREATE ───────────────────────────────────────────────────────
 const createEntry = async (req, res) => {
-  const { date, mood, title, content } = req.body;
+  const { date, mood, title, content, contentFormat, tags, isPinned, templateUsed } = req.body;
   const loggedUser = req.user;
 
   if (!title || !content || !mood)
@@ -14,16 +28,21 @@ const createEntry = async (req, res) => {
     return res.status(422).json({ message: "Please provide a valid date!" });
   if (title.length > 20)
     return res.status(422).json({ message: "Title length should not be more than 20 characters!" });
-  if (content.length > 1500)
-    return res.status(422).json({ message: "Content length should not be more than 1500 characters!" });
+  if (content.length > 10000)
+    return res.status(422).json({ message: "Content length should not be more than 10000 characters!" });
+
+  const sanitisedTags = sanitiseTags(tags);
 
   try {
     const saveEntry = await Entry.create({
-      createdBy: loggedUser._id,
+      createdBy:    loggedUser._id,
       date, title, mood, content,
+      contentFormat: contentFormat || "plain",
+      tags:          sanitisedTags,
+      isPinned:      !!isPinned,
+      templateUsed:  templateUsed || null,
     });
 
-    // Invalidate all cached data for this user so the next read is fresh
     await cache.invalidateUser(loggedUser._id);
 
     res.status(201).json({ message: "Entry added successfully!", saveEntry });
@@ -33,7 +52,7 @@ const createEntry = async (req, res) => {
   }
 };
 
-
+// ─── GET ALL (paginated, pinned first) ────────────────────────────
 const getEntries = async (req, res) => {
   const loggedUser = req.user;
 
@@ -43,19 +62,18 @@ const getEntries = async (req, res) => {
 
   const cacheKey = cache.keys.entries(loggedUser._id, page, limit);
 
-  // ── 1. Try cache ─────────────────────────────────────────────────
   const cached = await cache.get(cacheKey);
   if (cached) {
     return res.status(200).json({ ...cached, fromCache: true });
   }
 
-  // ── 2. Query DB ──────────────────────────────────────────────────
   try {
     const [total, entries] = await Promise.all([
       Entry.countDocuments({ createdBy: loggedUser._id }),
       Entry.find({ createdBy: loggedUser._id })
         .populate("createdBy", "firstName lastName")
-        .sort({ date: -1 })
+        // pinned entries rise to the top, then newest first
+        .sort({ isPinned: -1, date: -1 })
         .skip(skip)
         .limit(limit),
     ]);
@@ -71,9 +89,7 @@ const getEntries = async (req, res) => {
       },
     };
 
-    // ── 3. Store in cache ─────────────────────────────────────────
     await cache.set(cacheKey, payload, cache.ENTRY_TTL);
-
     res.status(200).json(payload);
   } catch (error) {
     console.error("Error fetching entries:", error);
@@ -89,8 +105,7 @@ const getEntry = async (req, res) => {
     const entry = await Entry.findOne({
       _id: entryId,
       createdBy: loggedUser._id,
-    })
-    // .populate("createdBy", "firstName lastName");
+    });
 
     if (!entry)
       return res.status(404).json({ message: "Entry not found or does not belong to the logged-in user!" });
@@ -106,7 +121,7 @@ const getEntry = async (req, res) => {
 const updateEntry = async (req, res) => {
   const loggedUser = req.user;
   const entryId    = req.params.id;
-  const { date, title, mood, content } = req.body;
+  const { date, title, mood, content, contentFormat, tags, isPinned } = req.body;
 
   if (!title || !content || !mood)
     return res.status(422).json({ message: "Please submit with required fields!" });
@@ -114,13 +129,20 @@ const updateEntry = async (req, res) => {
     return res.status(422).json({ message: "Please provide a valid date!" });
   if (title.length > 20)
     return res.status(422).json({ message: "Title length should not be more than 20 characters!" });
-  if (content.length > 1500)
-    return res.status(422).json({ message: "Content length should not be more than 1500 characters!" });
+  if (content.length > 10000)
+    return res.status(422).json({ message: "Content length should not be more than 10000 characters!" });
+
+  const sanitisedTags = sanitiseTags(tags);
 
   try {
     const entry = await Entry.findOneAndUpdate(
       { _id: entryId, createdBy: loggedUser._id },
-      { date, title, mood, content },
+      {
+        date, title, mood, content,
+        contentFormat: contentFormat || "plain",
+        tags:          sanitisedTags,
+        isPinned:      isPinned !== undefined ? !!isPinned : undefined,
+      },
       { new: true, runValidators: true }
     );
     if (!entry)
@@ -131,6 +153,31 @@ const updateEntry = async (req, res) => {
     res.status(200).json({ message: "Entry updated successfully!", data: entry });
   } catch (error) {
     console.error("Error updating entry:", error);
+    res.status(500).json({ message: "Something went wrong! Please try again later!" });
+  }
+};
+
+// ─── TOGGLE PIN ───────────────────────────────────────────────────
+const togglePin = async (req, res) => {
+  const loggedUser = req.user;
+  const entryId    = req.params.id;
+
+  try {
+    const entry = await Entry.findOne({ _id: entryId, createdBy: loggedUser._id });
+    if (!entry)
+      return res.status(404).json({ message: "Entry not found!" });
+
+    entry.isPinned = !entry.isPinned;
+    await entry.save();
+
+    await cache.invalidateUser(loggedUser._id);
+
+    res.status(200).json({
+      message: entry.isPinned ? "Entry pinned!" : "Entry unpinned!",
+      data: entry,
+    });
+  } catch (error) {
+    console.error("Error toggling pin:", error);
     res.status(500).json({ message: "Something went wrong! Please try again later!" });
   }
 };
@@ -156,7 +203,28 @@ const deleteEntry = async (req, res) => {
   }
 };
 
+// ─── GET ALL TAGS for a user ──────────────────────────────────────
+const getUserTags = async (req, res) => {
+  const loggedUser = req.user;
+  try {
+    const result = await Entry.aggregate([
+      { $match: { createdBy: loggedUser._id } },
+      { $unwind: "$tags" },
+      { $group: { _id: "$tags", count: { $sum: 1 } } },
+      { $sort: { count: -1 } },
+      { $limit: 100 },
+    ]);
+    res.status(200).json({
+      message: "Tags fetched successfully!",
+      data: result.map((r) => ({ tag: r._id, count: r.count })),
+    });
+  } catch (error) {
+    console.error("Error fetching tags:", error);
+    res.status(500).json({ message: "Something went wrong! Please try again later!" });
+  }
+};
 
+// ─── SEARCH ───────────────────────────────────────────────────────
 const searchEntries = async (req, res) => {
   const loggedUser = req.user;
 
@@ -164,6 +232,8 @@ const searchEntries = async (req, res) => {
   const rawMood     = req.query.mood     ?? "";
   const rawDateFrom = req.query.dateFrom ?? "";
   const rawDateTo   = req.query.dateTo   ?? "";
+  const rawTag      = req.query.tag      ?? "";   // NEW: filter by tag
+  const rawPinned   = req.query.pinned   ?? "";   // NEW: "true" to show only pinned
 
   const page  = Math.max(1, parseInt(req.query.page)  || 1);
   const limit = Math.min(50, Math.max(1, parseInt(req.query.limit) || 10));
@@ -173,10 +243,12 @@ const searchEntries = async (req, res) => {
   const hasMood     = rawMood.trim().length > 0;
   const hasDateFrom = rawDateFrom.trim().length > 0;
   const hasDateTo   = rawDateTo.trim().length > 0;
+  const hasTag      = rawTag.trim().length > 0;
+  const hasPinned   = rawPinned === "true";
 
-  if (!hasText && !hasMood && !hasDateFrom && !hasDateTo)
+  if (!hasText && !hasMood && !hasDateFrom && !hasDateTo && !hasTag && !hasPinned)
     return res.status(400).json({
-      message: "Provide at least one filter: text, mood, dateFrom, or dateTo.",
+      message: "Provide at least one filter: text, mood, dateFrom, dateTo, tag, or pinned.",
     });
 
   if (hasText && rawText.length > 100)
@@ -195,7 +267,9 @@ const searchEntries = async (req, res) => {
 
   const filter = { createdBy: loggedUser._id };
 
-  if (hasMood) filter.mood = rawMood;
+  if (hasMood)   filter.mood     = rawMood;
+  if (hasPinned) filter.isPinned = true;
+  if (hasTag)    filter.tags     = rawTag.trim().toLowerCase();
 
   if (hasDateFrom || hasDateTo) {
     filter.date = {};
@@ -215,7 +289,7 @@ const searchEntries = async (req, res) => {
   try {
     const [total, entries] = await Promise.all([
       Entry.countDocuments(filter),
-      Entry.find(filter).sort({ date: -1 }).skip(skip).limit(limit),
+      Entry.find(filter).sort({ isPinned: -1, date: -1 }).skip(skip).limit(limit),
     ]);
 
     res.status(200).json({
@@ -229,7 +303,53 @@ const searchEntries = async (req, res) => {
   }
 };
 
+// ─── CALENDAR DATA — entries grouped by date ─────────────────────
+const getCalendarData = async (req, res) => {
+  const loggedUser = req.user;
+  const { year, month } = req.query; // e.g. year=2025&month=3
 
+  if (!year || !month)
+    return res.status(400).json({ message: "year and month are required." });
+
+  const y = parseInt(year);
+  const m = parseInt(month) - 1; // JS months are 0-indexed
+  const startOfMonth = new Date(y, m, 1);
+  const endOfMonth   = new Date(y, m + 1, 0, 23, 59, 59, 999);
+
+  try {
+    const entries = await Entry.find({
+      createdBy: loggedUser._id,
+      date: { $gte: startOfMonth, $lte: endOfMonth },
+    })
+      .select("date title mood isPinned tags contentFormat")
+      .sort({ date: 1 });
+
+    // Group by YYYY-MM-DD
+    const grouped = {};
+    entries.forEach((e) => {
+      const key = new Date(e.date).toISOString().slice(0, 10);
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push({
+        _id:           e._id,
+        title:         e.title,
+        mood:          e.mood,
+        isPinned:      e.isPinned,
+        tags:          e.tags,
+        contentFormat: e.contentFormat,
+      });
+    });
+
+    res.status(200).json({
+      message: "Calendar data fetched successfully!",
+      data: grouped,
+    });
+  } catch (error) {
+    console.error("Error fetching calendar data:", error);
+    res.status(500).json({ message: "Something went wrong! Please try again later!" });
+  }
+};
+
+// ─── EXPORT ───────────────────────────────────────────────────────
 const exportEntries = async (req, res) => {
   const loggedUser = req.user;
   const format     = (req.query.format ?? "json").toLowerCase();
@@ -240,26 +360,27 @@ const exportEntries = async (req, res) => {
   try {
     const entries = await Entry.find({ createdBy: loggedUser._id })
       .sort({ date: -1 })
-      .lean(); // plain JS objects — faster for serialisation
+      .lean();
 
     if (format === "csv") {
-      // Build CSV manually — no extra package needed
       const escape = (val) => {
         if (val == null) return "";
         const str = String(val);
-        // Wrap in double-quotes if it contains comma, newline, or quote
         return /[",\n]/.test(str)
           ? `"${str.replace(/"/g, '""')}"`
           : str;
       };
 
-      const headers = ["id", "date", "title", "mood", "content", "createdAt", "updatedAt"];
+      const headers = ["id", "date", "title", "mood", "tags", "isPinned", "content", "contentFormat", "createdAt", "updatedAt"];
       const rows    = entries.map((e) => [
         escape(e._id),
         escape(e.date ? new Date(e.date).toISOString().slice(0, 10) : ""),
         escape(e.title),
         escape(e.mood),
-        escape(e.content), // still encrypted — correct
+        escape((e.tags || []).join("|")),
+        escape(e.isPinned ? "true" : "false"),
+        escape(e.content),
+        escape(e.contentFormat || "plain"),
         escape(e.createdAt ? new Date(e.createdAt).toISOString() : ""),
         escape(e.updatedAt ? new Date(e.updatedAt).toISOString() : ""),
       ]);
@@ -274,7 +395,6 @@ const exportEntries = async (req, res) => {
       return res.status(200).send(csv);
     }
 
-    // JSON (default)
     res.status(200).json({
       message:    "Entries exported successfully!",
       total:      entries.length,
@@ -293,11 +413,13 @@ const analyzeEntry = async (req, res) => {
 
   if (!content || !content.trim())
     return res.status(422).json({ message: "Content is required for mood analysis!" });
-  if (content.length > 1500)
-    return res.status(422).json({ message: "Content length should not be more than 1500 characters!" });
+  if (content.length > 10000)
+    return res.status(422).json({ message: "Content length should not be more than 10000 characters!" });
 
   try {
-    const mood = await analyzeMood(content);
+    // Strip HTML tags before sending to Gemini so AI sees plain text
+    const plainContent = content.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+    const mood = await analyzeMood(plainContent);
     res.status(200).json({ message: "Mood analyzed successfully!", mood });
   } catch (error) {
     console.error("Error analyzing mood:", error);
@@ -507,7 +629,9 @@ module.exports = {
   getEntries,
   getEntry,
   updateEntry,
+  togglePin,
   deleteEntry,
+  getUserTags,
   searchEntries,
   exportEntries,
   analyzeEntry,
@@ -515,4 +639,5 @@ module.exports = {
   getEntriesPerWeek,
   getEntriesPerMonth,
   getWritingStreak,
+  getCalendarData,
 };

@@ -30,12 +30,26 @@ const entriesApiSlice = apiSlice.injectEndpoints({
       invalidatesTags: ["Entries"],
     }),
 
-    // ── Advanced search ──────────────────────────────────────────
+    // ── Toggle pin — uses existing PATCH endpoint
+    // The backend entryModel now has isPinned; we send it via updateEntry.
+    // This is a thin wrapper that fetches the entry first then patches isPinned.
+    // For a true one-liner toggle, use the backend PATCH /:id/pin endpoint
+    // once you deploy the updated entryController.
+    togglePin: builder.mutation({
+      // We send a minimal patch: just flip isPinned.
+      // Backend must accept partial updates (it does via findOneAndUpdate).
+      query: ({ id, isPinned }) => ({
+        url: `/entries/${id}`,
+        method: "PATCH",
+        body: { isPinned },
+      }),
+      invalidatesTags: ["Entries"],
+    }),
+
+    // ── Advanced search ───────────────────────────────────────────
     searchEntry: builder.query({
       query: (filters = {}) => {
         const { text, mood, dateFrom, dateTo, page, limit } = filters;
-        // Build params — omit keys that are empty/undefined so the URL
-        // stays clean and the backend "at least one filter" guard works
         const params = {};
         if (text)     params.text     = text;
         if (mood)     params.mood     = mood;
@@ -47,7 +61,7 @@ const entriesApiSlice = apiSlice.injectEndpoints({
       },
     }),
 
-    // ── AI Mood Analysis ─────────────────────────────────────────
+    // ── AI Mood Analysis ──────────────────────────────────────────
     analyzeMood: builder.mutation({
       query: (content) => ({
         url: "/entries/analyze",
@@ -56,8 +70,7 @@ const entriesApiSlice = apiSlice.injectEndpoints({
       }),
     }),
 
-    // ── Analytics ────────────────────────────────────────────────
-
+    // ── Analytics ─────────────────────────────────────────────────
     getMoodAnalytics: builder.query({
       query: () => "/entries/analytics/mood",
       providesTags: ["Entries"],
@@ -92,6 +105,7 @@ export const {
   useGetEntryQuery,
   useUpdateEntryMutation,
   useDeleteEntryMutation,
+  useTogglePinMutation,
   useSearchEntryQuery,
   useAnalyzeMoodMutation,
   useGetMoodAnalyticsQuery,
