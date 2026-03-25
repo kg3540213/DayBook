@@ -17,7 +17,7 @@ app.use(helmet());
 app.use(
   morgan((tokens, req, res) => {
     return tokens.url(req, res);
-  })
+  }),
 );
 
 // ── Core middleware ───────────────────────────────────────────────
@@ -27,28 +27,26 @@ app.use(
   cors({
     origin: [process.env.FRONTEND_URL, "https://lpudaybook.onrender.com"],
     credentials: true,
-  })
+  }),
 );
 
 // ── Routes ────────────────────────────────────────────────────────
-const authRoutes          = require("./routes/authRoutes");
-const userRoutes          = require("./routes/userRoutes");
-const entryRoutes         = require("./routes/entryRoutes");
+const authRoutes = require("./routes/authRoutes");
+const userRoutes = require("./routes/userRoutes");
+const entryRoutes = require("./routes/entryRoutes");
 const sharedJournalRoutes = require("./routes/sharedJournalRoutes");
 
-app.use("/api/auth",            authRoutes);
-app.use("/api/users",           userRoutes);
-app.use("/api/entries",         entryRoutes);
-app.use("/api/shared-journals", sharedJournalRoutes);  // ← NEW
+app.use("/api/auth", authRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/entries", entryRoutes);
+app.use("/api/shared-journals", sharedJournalRoutes); // ← NEW
 
 // ── Serve Frontend (IMPORTANT) ────────────────────────────────────
 app.use(express.static(path.join(__dirname, "../../frontend/dist")));
 
 app.get("*", (req, res) => {
   if (!req.path.startsWith("/api")) {
-    return res.sendFile(
-      path.join(__dirname, "../../frontend/dist/index.html")
-    );
+    return res.sendFile(path.join(__dirname, "../../frontend/dist/index.html"));
   }
   res.status(404).json({ message: "Route not found." });
 });
