@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useLoginMutation } from "../redux/api/usersApiSlice";
 import { useDispatch, useSelector } from "react-redux";
 import { userInfo, setUserPassword } from "../redux/features/userSlice";
@@ -12,23 +12,24 @@ const Login = () => {
   const [password, setPassword] = useState("");
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [login, { isLoading }] = useLoginMutation();
 
   if (user) return <Navigate to="/" replace />;
+
+  // Read ?redirect= so we can bounce back to the invite page after login
+  const redirectTo = searchParams.get("redirect") || "/";
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
       const response = await login({ email, password }).unwrap();
 
-      // Dispatch user info to Redux
       dispatch(userInfo(response));
       dispatch(setUserPassword(password));
-
-      // Persist password to sessionStorage so it survives page refresh
       savePasswordToSession(password);
 
-      navigate("/");
+      navigate(redirectTo, { replace: true });
       toast.success(`Welcome back, ${response.data.firstName}`);
     } catch (error) {
       toast.error(error?.data?.message || "An unexpected error occurred!");
@@ -51,6 +52,15 @@ const Login = () => {
             <h2 className="card-title block text-center text-lg mb-2">
               Log in to DayBook
             </h2>
+
+            {/* Show a hint if user came from an invite link */}
+            {redirectTo.includes("invite") && (
+              <div className="alert alert-info rounded-xl text-xs py-2 mb-2">
+                <span>📩</span>
+                <span>Log in to view your journal invite.</span>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit}>
               <div className="text-sm">
                 <div>

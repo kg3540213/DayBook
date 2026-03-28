@@ -5,8 +5,6 @@ const crypto = require("crypto");
 const validator = require("validator");
 const { sendSharedJournalInviteEmail } = require("../services/EmailService");
 
-const ALLOWED_DOMAIN = "lpu.in";
-
 // ── helpers ───────────────────────────────────────────────────────
 
 // Verify caller is a member (owner or collaborator) of the journal
@@ -42,10 +40,6 @@ const createSharedJournal = async (req, res) => {
 
   if (!validator.isEmail(email))
     return res.status(422).json({ message: "Invalid invite email format!" });
-  if (!email.endsWith(`@${ALLOWED_DOMAIN}`))
-    return res
-      .status(403)
-      .json({ message: `Only @${ALLOWED_DOMAIN} emails are allowed.` });
   if (email === loggedUser.email)
     return res.status(422).json({ message: "You cannot invite yourself!" });
 

@@ -95,6 +95,11 @@ const Entries = () => {
 
   // ── Derive tag suggestions from all entries ───────────────────────
   const allEntries    = allEntriesData?.data ?? [];
+  console.log("[Entries] Full API response data:", allEntriesData);
+  console.log("[Entries] Extracted allEntries:", allEntries);
+  if (allEntries.length > 0) {
+    console.log("[Entries] First entry structure:", allEntries[0]);
+  }
   const popularTags   = useMemo(() => {
     const counts = {};
     allEntries.forEach((e) => (e.tags ?? []).forEach((t) => { counts[t] = (counts[t] ?? 0) + 1; }));

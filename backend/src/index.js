@@ -13,6 +13,12 @@ const { verifyEmailConfig } = require("./services/EmailService");
 
 const app = express();
 
+// ── Startup env check — remove after debugging ────────────────────
+console.log("=== ENV CHECK ===");
+console.log("PORT        :", process.env.PORT);
+console.log("FRONTEND_URL:", process.env.FRONTEND_URL);
+console.log("=================");
+
 // ── Security & Logging ────────────────────────────────────────────
 app.use(helmet());
 app.use(
@@ -40,7 +46,7 @@ const sharedJournalRoutes = require("./routes/sharedJournalRoutes");
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/entries", entryRoutes);
-app.use("/api/shared-journals", sharedJournalRoutes); // ← NEW
+app.use("/api/shared-journals", sharedJournalRoutes);
 
 // ── Serve Frontend (IMPORTANT) ────────────────────────────────────
 app.use(express.static(path.join(__dirname, "../../frontend/dist")));
@@ -66,12 +72,12 @@ let server;
 connectDB()
   .then(() => {
     console.log("Database connected successfully!");
-    
-    // Verify email configuration
+
     verifyEmailConfig();
 
     server = app.listen(process.env.PORT, () => {
       console.log(`Server is running on port ${process.env.PORT}!`);
+      console.log(`Frontend URL for invite emails: ${process.env.FRONTEND_URL}`);
     });
   })
   .catch((error) => {

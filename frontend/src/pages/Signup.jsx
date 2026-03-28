@@ -14,13 +14,6 @@ import {
 } from "../redux/features/userSlice";
 import { savePasswordToSession } from "../utils/sessionPassword";
 
-// ── LPU domain constant ───────────────────────────────────────────
-const ALLOWED_DOMAIN = "lpu.in";
-
-// Returns true only if email ends exactly with @lpu.in
-const isLpuEmail = (email) =>
-  email.trim().toLowerCase().endsWith(`@${ALLOWED_DOMAIN}`);
-
 // ── OTP input — 6 individual digit boxes ─────────────────────────
 const OtpInput = ({ otp, setOtp }) => {
   const inputsRef = useRef([]);
@@ -89,9 +82,6 @@ const Signup = () => {
     password:  "",
   });
 
-  // Tracks whether the typed email violates the domain rule in real-time
-  const [emailError, setEmailError] = useState("");
-
   const [passwordForEncryption, setPasswordForEncryption] = useState("");
   const [otp, setOtp] = useState("");
 
@@ -118,43 +108,14 @@ const Signup = () => {
 
   useEffect(() => () => clearInterval(timerRef.current), []);
 
-  // ── Handle email field change — instant domain check ──────────
-  const handleEmailChange = (e) => {
-    const val = e.target.value;
-    setFormData((prev) => ({ ...prev, email: val }));
-
-    // Only validate once the user has typed past the @ symbol
-    if (val.includes("@")) {
-      if (!isLpuEmail(val)) {
-        setEmailError(`Only @${ALLOWED_DOMAIN} email addresses are allowed.`);
-      } else {
-        setEmailError("");
-      }
-    } else {
-      setEmailError(""); // no @ yet, don't nag yet
-    }
-  };
-
   const handleChange = (e) => {
     const { name, value } = e.target;
-    if (name === "email") {
-      handleEmailChange(e);
-    } else {
-      setFormData((prev) => ({ ...prev, [name]: value }));
-    }
+    setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   // ── Step 1: Signup form submit ─────────────────────────────────
   const handleSignup = async (e) => {
     e.preventDefault();
-
-    // Guard: block submit if email domain is wrong
-    if (!isLpuEmail(formData.email)) {
-      setEmailError(`Only @${ALLOWED_DOMAIN} email addresses are allowed.`);
-      toast.error(`Only LPU college emails (@${ALLOWED_DOMAIN}) can sign up.`);
-      return;
-    }
-
     try {
       const response = await signup(formData).unwrap();
       dispatch(setPendingEmail(formData.email));
@@ -217,12 +178,6 @@ const Signup = () => {
           <div className="my-10 text-center">
             <p className="text-lg font-semibold">Create your DayBook account</p>
             <p className="text-lg font-semibold">and stay organized effortlessly.</p>
-
-            {/* LPU-only notice */}
-            <div className="inline-flex items-center gap-2 mt-3 px-4 py-2 rounded-xl bg-primary/10 border border-primary/30 text-sm font-medium text-primary">
-              🎓 Open exclusively to LPU students &amp; staff &nbsp;·&nbsp;
-              <span className="font-mono">@{ALLOWED_DOMAIN}</span> only
-            </div>
           </div>
 
           <div className="flex justify-center px-7 my-10">
@@ -265,33 +220,19 @@ const Signup = () => {
 
                     <div>
                       <label htmlFor="email">
-                        LPU Email <span className="text-red-500">*</span>
+                        Email <span className="text-red-500">*</span>
                       </label>
                       <input
                         id="email"
                         type="email"
                         name="email"
-                        className={`input w-full rounded-lg my-3 ${
-                          emailError ? "input-error border-error" : ""
-                        }`}
-                        placeholder={`e.g. avikghosh32@${ALLOWED_DOMAIN}`}
+                        className="input w-full rounded-lg my-3"
+                        placeholder="you@example.com"
                         value={formData.email}
                         onChange={handleChange}
                         required
                         autoComplete="on"
                       />
-                      {/* Instant domain error message */}
-                      {emailError && (
-                        <p className="text-error text-xs -mt-2 mb-2 flex items-center gap-1">
-                          <span>⚠️</span> {emailError}
-                        </p>
-                      )}
-                      {/* Green tick when domain is correct */}
-                      {!emailError && formData.email.includes("@") && isLpuEmail(formData.email) && (
-                        <p className="text-success text-xs -mt-2 mb-2 flex items-center gap-1">
-                          <span>✅</span> Valid LPU email address
-                        </p>
-                      )}
                     </div>
 
                     <div>
@@ -313,7 +254,7 @@ const Signup = () => {
                     <button
                       type="submit"
                       className="btn btn-primary w-full rounded-lg my-3"
-                      disabled={signingUp || !!emailError}
+                      disabled={signingUp}
                     >
                       {signingUp ? "Sending code..." : "Create Account"}
                     </button>
@@ -338,7 +279,7 @@ const Signup = () => {
           <div className="card card-xl bg-base-200 w-full max-w-sm rounded-2xl shadow-xl hover:shadow-2xl">
             <div className="card-body">
               <h2 className="card-title block text-center text-lg mb-1">
-                Verify your LPU email
+                Verify your email
               </h2>
               <p className="text-center text-sm text-base-content/60 mb-2">
                 We sent a 6-digit code to

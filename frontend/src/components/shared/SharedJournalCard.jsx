@@ -1,17 +1,15 @@
 import { useNavigate } from "react-router-dom";
+import { FaUsers, FaTrash } from "react-icons/fa";
 import { useDeleteSharedJournalMutation } from "../../redux/api/sharedJournalApiSlice";
-import ModalLayout from "../ModalLayout";
-import { useState } from "react";
 import { toast } from "react-toastify";
-import { FaTrashAlt, FaSignOutAlt, FaUsers, FaClock } from "react-icons/fa";
 
-// Tiny avatar pill
-const MemberPill = ({ user, label }) => {
+// ── Tiny member chip ──────────────────────────────────────────────
+const MemberChip = ({ user, label }) => {
   if (!user) return null;
   const initials =
     `${user.firstName?.[0] ?? ""}${user.lastName?.[0] ?? ""}`.toUpperCase() || "?";
   return (
-    <div className="flex items-center gap-1.5 text-xs text-base-content/60">
+    <div className="flex items-center gap-1.5">
       {user.profilePhoto ? (
         <img
           src={user.profilePhoto}
@@ -19,129 +17,97 @@ const MemberPill = ({ user, label }) => {
           className="w-5 h-5 rounded-full object-cover"
         />
       ) : (
-        <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-[10px] font-bold flex items-center justify-center">
+        <span className="w-5 h-5 rounded-full bg-primary/20 text-primary text-xs font-bold flex items-center justify-center">
           {initials}
         </span>
       )}
-      <span>{user.firstName} {user.lastName}</span>
-      <span className="text-base-content/30">({label})</span>
+      <div className="text-xs">
+        <p className="font-medium leading-tight">
+          {user.firstName} {user.lastName}
+        </p>
+        <p className="text-base-content/40 capitalize leading-tight">{label}</p>
+      </div>
     </div>
   );
 };
 
 const SharedJournalCard = ({ journal, currentUserId }) => {
   const navigate = useNavigate();
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [deleteSharedJournal, { isLoading }] = useDeleteSharedJournalMutation();
+  const [deleteSharedJournal, { isLoading: deleting }] = useDeleteSharedJournalMutation();
 
-  const isOwner = journal.owner?._id === currentUserId;
+  const isOwner = journal.owner._id === currentUserId;
 
-  const statusColors = {
-    active:   "badge-success",
-    pending:  "badge-warning",
-    declined: "badge-error",
-  };
-
-  const handleDeleteOrLeave = async () => {
-    try {
-      const res = await deleteSharedJournal(journal._id).unwrap();
-      toast.success(res.message);
-    } catch (err) {
-      toast.error(err?.data?.message || "Action failed.");
+  const handleDelete = async (e) => {
+    e.stopPropagation();
+    if (window.confirm("Are you sure you want to delete this shared journal? This action cannot be undone.")) {
+      try {
+        await deleteSharedJournal(journal._id).unwrap();
+        toast.success("Shared journal deleted successfully");
+      } catch (error) {
+        toast.error(error?.data?.message || "Failed to delete shared journal");
+      }
     }
   };
 
-  const formattedDate = new Date(journal.updatedAt).toLocaleDateString("default", {
-    day: "numeric", month: "short", year: "numeric",
-  });
+  const handleNavigate = () => {
+    navigate(`/shared-journals/${journal._id}`);
+  };
 
   return (
-    <>
-      <div
-        className="card bg-base-200 shadow-lg hover:shadow-xl rounded-3xl border border-base-300 hover:border-primary/30 transition-all cursor-pointer group"
-        onClick={() =>
-          journal.status === "active" &&
-          navigate(`/shared-journals/${journal._id}`)
-        }
-      >
-        <div className="card-body p-5">
-          {/* Header row */}
-          <div className="flex justify-between items-start mb-2">
-            <div className="flex items-center gap-2">
-              <FaUsers className="text-primary opacity-70" />
-              <h2 className="font-bold text-lg leading-tight group-hover:text-primary transition-colors">
-                {journal.name}
-              </h2>
-            </div>
-            <span className={`badge badge-sm ${statusColors[journal.status] ?? "badge-ghost"}`}>
-              {journal.status}
-            </span>
-          </div>
+    <div
+      onClick={handleNavigate}
+      className="card bg-base-200 shadow-md hover:shadow-xl hover:scale-102 transition-all duration-200 rounded-2xl cursor-pointer border border-base-300 relative overflow-hidden group"
+    >
+      {/* Delete button - only for owner */}
+      {isOwner && (
+        <button
+          onClick={handleDelete}
+          disabled={deleting}
+          title="Delete"
+          className="absolute top-3 right-3 btn btn-sm btn-ghost btn-circle text-error opacity-0 group-hover:opacity-100 transition-opacity z-10"
+        >
+          <FaTrash />
+        </button>
+      )}
 
-          {/* Description */}
-          {journal.description && (
-            <p className="text-sm text-base-content/60 mb-3 leading-relaxed">
-              {journal.description}
-            </p>
-          )}
-
-          {/* Members */}
-          <div className="flex flex-col gap-1.5 mb-3">
-            <MemberPill user={journal.owner}        label="owner" />
-            {journal.collaborator ? (
-              <MemberPill user={journal.collaborator} label="collaborator" />
-            ) : (
-              <p className="text-xs text-base-content/40 italic">
-                Waiting for {journal.inviteEmail} to accept…
+      <div className="card-body p-4">
+        {/* Header */}
+        <div className="flex items-start gap-2 mb-3">
+          <FaUsers className="text-primary text-lg mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <h3 className="card-title text-base leading-tight truncate">{journal.name}</h3>
+            {journal.description && (
+              <p className="text-xs text-base-content/60 line-clamp-2 mt-1">
+                {journal.description}
               </p>
             )}
           </div>
+        </div>
 
-          {/* Footer */}
-          <div className="flex justify-between items-center pt-2 border-t border-base-300">
-            <div className="flex items-center gap-1 text-xs text-base-content/40">
-              <FaClock className="text-[10px]" />
-              <span>Updated {formattedDate}</span>
-            </div>
+        {/* Members */}
+        <div className="space-y-2 mb-3 pb-3 border-b border-base-300">
+          <MemberChip user={journal.owner} label="Owner" />
+          {journal.collaborator && (
+            <MemberChip user={journal.collaborator} label="Collaborator" />
+          )}
+          {!journal.collaborator && journal.status === "pending" && (
+            <div className="text-xs text-warning font-medium">⏳ Waiting for acceptance</div>
+          )}
+        </div>
 
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setConfirmOpen(true);
-              }}
-              className={`btn btn-xs btn-ghost ${isOwner ? "text-error" : "text-warning"}`}
-              title={isOwner ? "Delete journal" : "Leave journal"}
-            >
-              {isOwner ? <FaTrashAlt /> : <FaSignOutAlt />}
-              {isOwner ? "Delete" : "Leave"}
-            </button>
-          </div>
+        {/* Status badge */}
+        <div className="flex items-center justify-between">
+          <span className={`badge badge-sm ${
+            journal.status === "active" ? "badge-success" : "badge-warning"
+          }`}>
+            {journal.status === "active" ? "Active" : "Pending"}
+          </span>
+          <span className="text-xs text-base-content/50">
+            {new Date(journal.createdAt).toLocaleDateString()}
+          </span>
         </div>
       </div>
-
-      <ModalLayout isOpen={confirmOpen} close={() => setConfirmOpen(false)}>
-        <h1 className="text-lg">
-          {isOwner
-            ? "Delete this shared journal and all its entries?"
-            : "Leave this shared journal?"}
-        </h1>
-        <p className="text-sm text-base-content/60 mt-1">
-          {isOwner
-            ? "This action is permanent and cannot be undone."
-            : "You will lose access. The owner can re-invite you later."}
-        </p>
-        <div className="modal-action">
-          <button onClick={() => setConfirmOpen(false)} className="btn btn-success">Cancel</button>
-          <button
-            onClick={handleDeleteOrLeave}
-            disabled={isLoading}
-            className="btn btn-error"
-          >
-            {isLoading ? "Please wait…" : isOwner ? "Delete" : "Leave"}
-          </button>
-        </div>
-      </ModalLayout>
-    </>
+    </div>
   );
 };
 

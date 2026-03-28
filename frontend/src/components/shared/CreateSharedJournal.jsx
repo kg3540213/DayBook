@@ -46,7 +46,7 @@ const CreateSharedJournal = () => {
             Create Shared Journal
           </h2>
           <p className="text-center text-sm text-base-content/50 mb-4">
-            Invite one LPU student to write together.
+            Invite anyone to write together.
           </p>
 
           {/* Encryption warning */}
@@ -101,11 +101,11 @@ const CreateSharedJournal = () => {
                 value={form.inviteEmail}
                 onChange={handleChange}
                 className="input w-full rounded-xl"
-                placeholder="friend@lpu.in"
+                placeholder="friend@example.com"
                 required
               />
               <p className="text-xs text-base-content/40 mt-1">
-                Must be an @lpu.in address. They'll receive an email invite.
+                They'll receive an email invite to join.
               </p>
             </div>
 

@@ -1,4 +1,5 @@
-import { useParams, useNavigate, Navigate } from "react-router-dom";
+import { useEffect } from "react";
+import { useParams, useNavigate, Navigate, useLocation, useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import {
   useGetInviteInfoQuery,
@@ -9,29 +10,67 @@ import Loader from "../components/Loader";
 import { toast } from "react-toastify";
 import { FaUsers } from "react-icons/fa";
 
-// This page is reached from the invite email link:
-//   /shared-journals/invite/:token/accept   (action=accept)
-//   /shared-journals/invite/:token/decline  (action=decline)
-// OR just:
-//   /shared-journals/invite/:token          (shows the info + buttons)
-
 const InviteHandler = () => {
-  const user = useSelector((state) => state.user.data);
-  const { token } = useParams();
-  const navigate   = useNavigate();
+  const user           = useSelector((state) => state.user.data);
+  const { token }      = useParams();
+  const navigate       = useNavigate();
+  const location       = useLocation();
+  const [searchParams] = useSearchParams();
+
+  // ?action=accept  or  ?action=decline  (set by the email links)
+  const action = searchParams.get("action"); // "accept" | "decline" | null
 
   const { data, isLoading, isError } = useGetInviteInfoQuery(token, { skip: !token });
 
   const [acceptInvite,  { isLoading: accepting  }] = useAcceptInviteMutation();
   const [declineInvite, { isLoading: declining  }] = useDeclineInviteMutation();
 
-  // Must be logged in
+  // Must be logged in — preserve the full path + query string for redirect
   if (!user) {
-    // Store the current path so they land here after login
-    return <Navigate to={`/login?redirect=/shared-journals/invite/${token}`} replace />;
+    return (
+      <Navigate
+        to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`}
+        replace
+      />
+    );
   }
 
-  if (isLoading) {
+  const info = data?.data;
+
+  // ── Auto-trigger accept / decline when arriving from the email link ──
+  useEffect(() => {
+    if (!info || !action) return;
+    if (info.status === "active" || info.status === "declined") return;
+
+    // Only the invited email can act
+    if (user.data.email !== info.inviteEmail) return;
+
+    if (action === "accept") {
+      acceptInvite(token)
+        .unwrap()
+        .then((res) => {
+          toast.success(res.message || "You've joined the shared journal!");
+          navigate("/shared-journals");
+        })
+        .catch((err) => {
+          toast.error(err?.data?.message || "Could not accept invite.");
+        });
+    } else if (action === "decline") {
+      declineInvite(token)
+        .unwrap()
+        .then((res) => {
+          toast.info(res.message || "Invite declined.");
+          navigate("/");
+        })
+        .catch((err) => {
+          toast.error(err?.data?.message || "Could not decline invite.");
+        });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [info, action]);
+
+  // ── Loading ──────────────────────────────────────────────────────
+  if (isLoading || (action && !info)) {
     return (
       <div className="flex justify-center items-center min-h-[calc(100dvh-64px-52px)]">
         <Loader />
@@ -39,6 +78,7 @@ const InviteHandler = () => {
     );
   }
 
+  // ── Error / invalid token ────────────────────────────────────────
   if (isError || !data) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100dvh-64px-52px)] gap-4 px-6 text-center">
@@ -57,21 +97,50 @@ const InviteHandler = () => {
     );
   }
 
-  const info = data.data;
-
+  // ── Already active ───────────────────────────────────────────────
   if (info.status === "active") {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100dvh-64px-52px)] gap-4 px-6 text-center">
         <span className="text-5xl">✅</span>
         <h2 className="text-2xl font-bold">Already Active!</h2>
         <p className="text-base-content/60">This journal is already active.</p>
-        <button onClick={() => navigate("/shared-journals")} className="btn btn-primary rounded-xl">
+        <button
+          onClick={() => navigate("/shared-journals")}
+          className="btn btn-primary rounded-xl"
+        >
           Open Shared Journals
         </button>
       </div>
     );
   }
 
+  // ── Already declined ─────────────────────────────────────────────
+  if (info.status === "declined") {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100dvh-64px-52px)] gap-4 px-6 text-center">
+        <span className="text-5xl">❌</span>
+        <h2 className="text-2xl font-bold">Invite Declined</h2>
+        <p className="text-base-content/60">This invite was already declined.</p>
+        <button onClick={() => navigate("/")} className="btn btn-ghost rounded-xl">
+          Go Home
+        </button>
+      </div>
+    );
+  }
+
+  // ── Auto-triggering spinner (email link with ?action=) ───────────
+  if (action && user.data.email === info.inviteEmail) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[calc(100dvh-64px-52px)] gap-4 px-6 text-center">
+        <Loader />
+        <p className="text-base-content/60 text-sm">
+          {action === "accept" ? "Joining journal…" : "Declining invite…"}
+        </p>
+      </div>
+    );
+  }
+
+  // ── Manual accept / decline UI (no ?action, or wrong account) ────
   const handleAccept = async () => {
     try {
       const res = await acceptInvite(token).unwrap();
@@ -114,10 +183,12 @@ const InviteHandler = () => {
           {/* Encryption warning */}
           <div className="alert alert-warning rounded-xl text-xs py-2 text-left">
             <span>🔓</span>
-            <span>Shared entries are <strong>not encrypted</strong>. Both of you can read them.</span>
+            <span>
+              Shared entries are <strong>not encrypted</strong> — both members can read them.
+            </span>
           </div>
 
-          {/* Account check */}
+          {/* Wrong account warning */}
           {user.data.email !== info.inviteEmail && (
             <div className="alert alert-error rounded-xl text-xs py-2">
               <span>⚠️</span>
@@ -128,7 +199,7 @@ const InviteHandler = () => {
             </div>
           )}
 
-          {/* Actions */}
+          {/* Action buttons — only shown for the right account */}
           {user.data.email === info.inviteEmail && (
             <div className="flex gap-3 w-full">
               <button

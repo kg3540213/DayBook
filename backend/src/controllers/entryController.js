@@ -12,6 +12,7 @@ const sanitiseTags = (raw) => {
     ...new Set(
       raw
         .map((t) => String(t).trim().toLowerCase().slice(0, 30))
+        // Removes "", null, undefined after trimming and slicing
         .filter(Boolean)
     ),
   ].slice(0, 10);
@@ -52,7 +53,7 @@ const createEntry = async (req, res) => {
   }
 };
 
-// ─── GET ALL (paginated, pinned first) ────────────────────────────
+// ─── GET ALL entries(paginated, pinned first) ────────────────────────────
 const getEntries = async (req, res) => {
   const loggedUser = req.user;
 
@@ -141,7 +142,7 @@ const updateEntry = async (req, res) => {
         date, title, mood, content,
         contentFormat: contentFormat || "plain",
         tags:          sanitisedTags,
-        isPinned:      isPinned !== undefined ? !!isPinned : undefined,
+        isPinned:      isPinned !== undefined ? isPinned : undefined,
       },
       { new: true, runValidators: true }
     );
@@ -163,21 +164,32 @@ const togglePin = async (req, res) => {
   const entryId    = req.params.id;
 
   try {
+    console.log(`[togglePin] User: ${loggedUser._id}, Entry: ${entryId}`);
+    
     const entry = await Entry.findOne({ _id: entryId, createdBy: loggedUser._id });
-    if (!entry)
+    if (!entry) {
+      console.warn(`[togglePin] Entry not found: ${entryId}`);
       return res.status(404).json({ message: "Entry not found!" });
+    }
 
+    const previousState = entry.isPinned;
     entry.isPinned = !entry.isPinned;
     await entry.save();
 
-    await cache.invalidateUser(loggedUser._id);
+    console.log(`[togglePin] Success: ${previousState} → ${entry.isPinned}`);
+
+    try {
+      await cache.invalidateUser(loggedUser._id);
+    } catch (cacheErr) {
+      console.warn("[togglePin] Cache invalidation failed (non-fatal):", cacheErr.message);
+    }
 
     res.status(200).json({
       message: entry.isPinned ? "Entry pinned!" : "Entry unpinned!",
       data: entry,
     });
   } catch (error) {
-    console.error("Error toggling pin:", error);
+    console.error("[togglePin] Fatal error:", error.message, error.stack);
     res.status(500).json({ message: "Something went wrong! Please try again later!" });
   }
 };

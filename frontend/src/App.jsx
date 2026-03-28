@@ -33,11 +33,18 @@ const App = () => {
             <Route path="about"     element={<About />} />
 
             {/* ── Shared Journals ─────────────────────────────── */}
-            <Route path="shared-journals"            element={<SharedJournals />} />
-            <Route path="shared-journals/:journalId" element={<SharedJournalDetail />} />
+            <Route path="shared-journals" element={<SharedJournals />} />
+
+            {/* IMPORTANT: invite route MUST come before /:journalId
+                otherwise React Router v7 matches "invite" as a journalId */}
             <Route
               path="shared-journals/invite/:token"
               element={<InviteHandler />}
+            />
+
+            <Route
+              path="shared-journals/:journalId"
+              element={<SharedJournalDetail />}
             />
 
             <Route path="*" element={<NotFound />} />

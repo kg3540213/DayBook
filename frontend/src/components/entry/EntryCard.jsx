@@ -44,6 +44,7 @@ const EntryCard = ({
   contentFormat = "plain",
 }) => {
   const userPassword = useSelector((state) => state.user.userPassword);
+  // togglePin now takes just the id — uses PATCH /entries/:id/pin
   const [togglePin, { isLoading: pinning }] = useTogglePinMutation();
 
   // ── Decrypt ──────────────────────────────────────────────────────

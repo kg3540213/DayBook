@@ -33,12 +33,12 @@ const Profile = ({ close }) => {
   const [uploadProfilePhoto, { isLoading: uploading }] = useUploadProfilePhotoMutation();
   const [deleteProfilePhoto, { isLoading: deleting  }] = useDeleteProfilePhotoMutation();
 
-  const currentPhoto = user?.data?.profilePhoto ?? null;
+  const currentPhoto = user?.data?.data?.profilePhoto ?? null;
 
   useEffect(() => {
     if (user) {
-      setFirstName(user?.data?.firstName ?? "");
-      setLastName(user?.data?.lastName   ?? "");
+      setFirstName(user?.data?.data?.firstName ?? "");
+      setLastName(user?.data?.data?.lastName   ?? "");
     }
     setPreview(null);
   }, [user, close]);
@@ -152,8 +152,8 @@ const Profile = ({ close }) => {
             />
           ) : (
             <DefaultAvatar
-              firstName={user?.data?.firstName}
-              lastName={user?.data?.lastName}
+              firstName={user?.data?.data?.firstName}
+              lastName={user?.data?.data?.lastName}
             />
           )}
           <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold pointer-events-none">

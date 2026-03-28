@@ -4,9 +4,9 @@ import { useSelector } from "react-redux";
 const Home = () => {
   const user = useSelector((state) => state.user.data);
 
-  const firstName  = user?.data?.firstName  ?? "";
-  const lastName   = user?.data?.lastName   ?? "";
-  const photoUrl   = user?.data?.profilePhoto ?? null;
+  const firstName  = user?.data?.data?.firstName  ?? "";
+  const lastName   = user?.data?.data?.lastName   ?? "";
+  const photoUrl   = user?.data?.data?.profilePhoto ?? null;
 
   const initials =
     `${firstName?.[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase() || "?";

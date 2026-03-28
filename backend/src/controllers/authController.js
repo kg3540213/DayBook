@@ -5,14 +5,6 @@ const generateToken = require("../utils/generateToken");
 const { sendOtpEmail } = require("../services/EmailService");
 const crypto = require("crypto");
 
-// ── LPU domain restriction ────────────────────────────────────────
-// Only email addresses ending with @lpu.in are allowed to sign up.
-const ALLOWED_DOMAIN = "lpu.in";
-
-const isLpuEmail = (email) => {
-  return email.endsWith(`@${ALLOWED_DOMAIN}`);
-};
-
 const generateOtp = () =>
   crypto.randomInt(100000, 999999).toString();
 
@@ -30,14 +22,8 @@ const signup = async (req, res) => {
     if (!validator.isEmail(email))
       return res.status(422).json({ message: "Invalid email format!" });
 
-    // ── LPU domain check — reject immediately if not @lpu.in ─────
-    if (!isLpuEmail(email))
-      return res.status(403).json({
-        message: `Only LPU college email addresses (@${ALLOWED_DOMAIN}) are allowed to sign up.`,
-      });
-
-    if (email.length > 50)
-      return res.status(422).json({ message: "Email cannot exceed 50 characters!" });
+    if (email.length > 100)
+      return res.status(422).json({ message: "Email cannot exceed 100 characters!" });
     if (firstName.length > 50)
       return res.status(422).json({ message: "First name cannot exceed 50 characters!" });
     if (lastName && lastName.length > 50)
@@ -61,8 +47,6 @@ const signup = async (req, res) => {
       const otp = generateOtp();
       const otpHash = await bcrypt.hash(otp, 10);
       const now = new Date();
-
-      // console.log(otp, otpHash);
 
       existingUser.password  = await bcrypt.hash(password, 10);
       existingUser.firstName = firstName;
@@ -103,13 +87,12 @@ const signup = async (req, res) => {
       await sendOtpEmail(email, otp, firstName);
     } catch (emailError) {
       console.error("Email sending failed:", emailError);
-      // Delete the user since email failed
       await User.findOneAndDelete({ email });
       return res.status(500).json({ message: "Failed to send verification email. Please try again." });
     }
 
     res.status(201).json({
-      message: "Account created! Please check your LPU email for the verification code.",
+      message: "Account created! Please check your email for the verification code.",
       email,
     });
   } catch (error) {
@@ -230,12 +213,6 @@ const login = async (req, res) => {
       return res.status(400).json({ message: "Email and password are required!" });
 
     const email = rawEmail.trim().toLowerCase();
-
-    // ── LPU domain check on login too ────────────────────────────
-    if (!isLpuEmail(email))
-      return res.status(403).json({
-        message: `Only LPU college email addresses (@${ALLOWED_DOMAIN}) are allowed.`,
-      });
 
     const user = await User.findOne({ email });
     if (!user)

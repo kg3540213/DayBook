@@ -39,9 +39,9 @@ const NavProfile = () => {
     if (elem) elem?.blur();
   };
 
-  const photoUrl   = user?.data?.profilePhoto ?? null;
-  const firstName  = user?.data?.firstName    ?? "";
-  const lastName   = user?.data?.lastName     ?? "";
+  const photoUrl   = user?.data?.data?.profilePhoto ?? null;
+  const firstName  = user?.data?.data?.firstName    ?? "";
+  const lastName   = user?.data?.data?.lastName     ?? "";
 
   return (
     <>

@@ -30,18 +30,11 @@ const entriesApiSlice = apiSlice.injectEndpoints({
       invalidatesTags: ["Entries"],
     }),
 
-    // ── Toggle pin — uses existing PATCH endpoint
-    // The backend entryModel now has isPinned; we send it via updateEntry.
-    // This is a thin wrapper that fetches the entry first then patches isPinned.
-    // For a true one-liner toggle, use the backend PATCH /:id/pin endpoint
-    // once you deploy the updated entryController.
+    // ── Toggle pin — uses dedicated PATCH /:id/pin endpoint ───────
     togglePin: builder.mutation({
-      // We send a minimal patch: just flip isPinned.
-      // Backend must accept partial updates (it does via findOneAndUpdate).
-      query: ({ id, isPinned }) => ({
-        url: `/entries/${id}`,
+      query: (id) => ({
+        url: `/entries/${id}/pin`,
         method: "PATCH",
-        body: { isPinned },
       }),
       invalidatesTags: ["Entries"],
     }),

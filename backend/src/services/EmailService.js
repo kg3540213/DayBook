@@ -4,7 +4,7 @@ const nodemailer = require("nodemailer");
 const transporter = nodemailer.createTransport({
   host: "smtp-relay.brevo.com",
   port: 2525,
-  secure: false, // true for 465, false for other ports like 587
+  secure: false,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS,
@@ -14,10 +14,18 @@ const transporter = nodemailer.createTransport({
 // ── OTP verification email ────────────────────────────────────────
 const sendOtpEmail = async (toEmail, otp, firstName) => {
   try {
+    // Use EMAIL_USER as FROM (verified sender), SMTP_USER is just for auth
+    const fromEmail = process.env.EMAIL_USER || process.env.SMTP_USER;
+    if (!fromEmail) {
+      throw new Error("EMAIL_USER or SMTP_USER environment variable not configured");
+    }
+
     const mailOptions = {
-      from: `"DayBook" <${process.env.EMAIL_USER}>`,
+      from: `"DayBook" <${fromEmail}>`,
+      replyTo: fromEmail,
       to: toEmail,
       subject: "Your DayBook Verification Code",
+      text: `Hi ${firstName},\n\nYour DayBook verification code is: ${otp}\n\nThis code expires in 10 minutes.\n\nIf you didn't create a DayBook account, you can safely ignore this email.`,
       html: `
         <div style="font-family: sans-serif; max-width: 480px; margin: 0 auto; padding: 32px 24px; background: #f9fafb; border-radius: 12px;">
           <h2 style="margin: 0 0 8px; color: #111;">Hi ${firstName} 👋</h2>
@@ -59,17 +67,26 @@ const sendSharedJournalInviteEmail = async (
   journalName,
   inviteToken
 ) => {
-  // VITE_BACKEND_URL may not be set in backend env; fall back to FRONTEND_URL
   const frontendUrl =
     process.env.FRONTEND_URL || "http://localhost:5173";
 
-  const acceptUrl  = `${frontendUrl}/shared-journals/invite/${inviteToken}/accept`;
-  const declineUrl = `${frontendUrl}/shared-journals/invite/${inviteToken}/decline`;
+  // Both buttons go to the same invite page — the page shows Accept/Decline UI.
+  // Append ?action=accept or ?action=decline so InviteHandler can auto-trigger.
+  const acceptUrl  = `${frontendUrl}/shared-journals/invite/${inviteToken}?action=accept`;
+  const declineUrl = `${frontendUrl}/shared-journals/invite/${inviteToken}?action=decline`;
+
+  // Use EMAIL_USER as FROM (verified sender), SMTP_USER is just for auth
+  const fromEmail = process.env.EMAIL_USER || process.env.SMTP_USER;
+  if (!fromEmail) {
+    throw new Error("EMAIL_USER or SMTP_USER environment variable not configured");
+  }
 
   const mailOptions = {
-    from: `"DayBook" <${process.env.EMAIL_USER}>`,
+    from: `"DayBook" <${fromEmail}>`,
+    replyTo: fromEmail,
     to: toEmail,
     subject: `${inviterFirstName} invited you to a shared journal on DayBook`,
+    text: `You've been invited!\n\n${inviterFirstName} has invited you to join a shared journal called "${journalName}" on DayBook.\n\nAccept: ${acceptUrl}\nDecline: ${declineUrl}\n\nThis invite expires in 7 days.`,
     html: `
       <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 24px; background: #f9fafb; border-radius: 12px;">
         <h2 style="margin: 0 0 8px; color: #111;">You've been invited! 📓</h2>
@@ -86,7 +103,7 @@ const sendSharedJournalInviteEmail = async (
           In a shared journal, both of you can write entries and read each other's thoughts — a private space just for the two of you.
         </p>
 
-        <div style="display: flex; gap: 12px; margin-bottom: 24px;">
+        <div style="margin-bottom: 24px;">
           <a href="${acceptUrl}"
              style="display: inline-block; background: #6366f1; color: #fff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 600; font-size: 15px; margin-right: 12px;">
             ✅ Accept Invite
@@ -126,10 +143,18 @@ const verifyEmailConfig = async () => {
     const smtpHost = process.env.SMTP_HOST || "smtp-relay.brevo.com";
     const smtpUser = process.env.SMTP_USER || process.env.EMAIL_USER;
     const smtpPass = process.env.SMTP_PASS || process.env.EMAIL_PASS;
+    const fromEmail = process.env.EMAIL_USER || process.env.SMTP_USER;
 
-    if (!smtpHost || !smtpUser || !smtpPass) {
-      console.warn("⚠️  SMTP credentials not configured. Email sending will fail.");
-      console.warn("Please set: SMTP_HOST, SMTP_USER (or EMAIL_USER), SMTP_PASS (or EMAIL_PASS)");
+    console.log("=== EMAIL CONFIGURATION ===");
+    console.log("SMTP_HOST    :", smtpHost);
+    console.log("SMTP_USER    :", smtpUser ? "✓ Configured" : "✗ NOT SET");
+    console.log("SMTP_PASS    :", smtpPass ? "✓ Configured" : "✗ NOT SET");
+    console.log("FROM EMAIL   :", fromEmail ? `✓ ${fromEmail}` : "✗ NOT SET");
+    console.log("============================");
+
+    if (!smtpHost || !smtpUser || !smtpPass || !fromEmail) {
+      console.warn("⚠️  Email credentials not fully configured. Email sending will fail.");
+      console.warn("Required: SMTP_HOST, SMTP_USER, SMTP_PASS, EMAIL_USER");
       return false;
     }
     await transporter.verify();
@@ -142,4 +167,3 @@ const verifyEmailConfig = async () => {
 };
 
 module.exports = { sendOtpEmail, sendSharedJournalInviteEmail, verifyEmailConfig };
-
