@@ -31,84 +31,30 @@ const MemberChip = ({ user, label }) => {
   );
 };
 
-const SharedJournalCard = ({ journal, currentUserId }) => {
-  const navigate = useNavigate();
-  const [deleteSharedJournal, { isLoading: deleting }] = useDeleteSharedJournalMutation();
+const SharedJournalCard = ({ journal, currentUserId, currentUserEmail }) => {
+  const isPendingInvitee = 
+    journal.status === "pending" && 
+    journal.inviteEmail === currentUserEmail &&
+    journal.owner._id !== currentUserId;
 
-  const isOwner = journal.owner._id === currentUserId;
-
-  const handleDelete = async (e) => {
-    e.stopPropagation();
-    if (window.confirm("Are you sure you want to delete this shared journal? This action cannot be undone.")) {
-      try {
-        await deleteSharedJournal(journal._id).unwrap();
-        toast.success("Shared journal deleted successfully");
-      } catch (error) {
-        toast.error(error?.data?.message || "Failed to delete shared journal");
-      }
-    }
-  };
-
-  const handleNavigate = () => {
-    navigate(`/shared-journals/${journal._id}`);
-  };
-
-  return (
-    <div
-      onClick={handleNavigate}
-      className="card bg-base-200 shadow-md hover:shadow-xl hover:scale-102 transition-all duration-200 rounded-2xl cursor-pointer border border-base-300 relative overflow-hidden group"
-    >
-      {/* Delete button - only for owner */}
-      {isOwner && (
-        <button
-          onClick={handleDelete}
-          disabled={deleting}
-          title="Delete"
-          className="absolute top-3 right-3 btn btn-sm btn-ghost btn-circle text-error opacity-0 group-hover:opacity-100 transition-opacity z-10"
-        >
-          <FaTrash />
-        </button>
-      )}
-
-      <div className="card-body p-4">
-        {/* Header */}
-        <div className="flex items-start gap-2 mb-3">
-          <FaUsers className="text-primary text-lg mt-0.5 shrink-0" />
-          <div className="flex-1 min-w-0">
-            <h3 className="card-title text-base leading-tight truncate">{journal.name}</h3>
-            {journal.description && (
-              <p className="text-xs text-base-content/60 line-clamp-2 mt-1">
-                {journal.description}
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Members */}
-        <div className="space-y-2 mb-3 pb-3 border-b border-base-300">
-          <MemberChip user={journal.owner} label="Owner" />
-          {journal.collaborator && (
-            <MemberChip user={journal.collaborator} label="Collaborator" />
-          )}
-          {!journal.collaborator && journal.status === "pending" && (
-            <div className="text-xs text-warning font-medium">⏳ Waiting for acceptance</div>
-          )}
-        </div>
-
-        {/* Status badge */}
-        <div className="flex items-center justify-between">
-          <span className={`badge badge-sm ${
-            journal.status === "active" ? "badge-success" : "badge-warning"
-          }`}>
-            {journal.status === "active" ? "Active" : "Pending"}
-          </span>
-          <span className="text-xs text-base-content/50">
-            {new Date(journal.createdAt).toLocaleDateString()}
-          </span>
+  // In the card body, show accept/decline if pending invitee
+  if (isPendingInvitee) {
+    return (
+      // Card with accept/decline buttons instead of navigation
+      <div className="card ...">
+        {/* journal name, owner info */}
+        <div className="flex gap-2 mt-3">
+          <button onClick={handleAccept} className="btn btn-primary btn-sm flex-1">
+            Accept
+          </button>
+          <button onClick={handleDecline} className="btn btn-ghost btn-sm text-error">
+            Decline
+          </button>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
+  // ... rest of card
 };
 
 export default SharedJournalCard;

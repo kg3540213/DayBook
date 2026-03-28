@@ -62,41 +62,39 @@ const InviteHandler = () => {
   const autoTriggered = useRef(false);
 
   useEffect(() => {
-    // Wait until info is loaded AND we haven't triggered yet
-    if (!info || !action || autoTriggered.current) return;
-    // Only the invited email can auto-accept/decline
-    if (!isRightAccount) return;
-    // Don't auto-trigger if the journal is already in a terminal state
-    if (info.status === "active" || info.status === "declined") return;
+  if (!info || !action || autoTriggered.current) return;
+  if (!isRightAccount) return;
+  if (info.status === "active" || info.status === "declined") return;
 
-    autoTriggered.current = true;
+  autoTriggered.current = true;
 
-    if (action === "accept") {
-      acceptInvite(token)
-        .unwrap()
-        .then((res) => {
-          toast.success(res.message || "You've joined the shared journal!");
-          navigate("/shared-journals", { replace: true });
-        })
-        .catch((err) => {
-          toast.error(err?.data?.message || "Could not accept invite.");
-          // Reset so the manual buttons are usable as a fallback
-          autoTriggered.current = false;
-        });
-    } else if (action === "decline") {
-      declineInvite(token)
-        .unwrap()
-        .then((res) => {
-          toast.info(res.message || "Invite declined.");
-          navigate("/", { replace: true });
-        })
-        .catch((err) => {
-          toast.error(err?.data?.message || "Could not decline invite.");
-          autoTriggered.current = false;
-        });
-    }
-  }, [info, action, isRightAccount]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (action === "accept") {
+    acceptInvite(token)
+      .unwrap()
+      .then((res) => {
+        toast.success(res.message || "You've joined the shared journal!");
+        navigate("/shared-journals", { replace: true });
+      })
+      .catch((err) => {
+        toast.error(err?.data?.message || "Could not accept invite.");
+        autoTriggered.current = false;
+      });
+  } else if (action === "decline") {
+    declineInvite(token)
+      .unwrap()
+      .then((res) => {
+        toast.info(res.message || "Invite declined.");
+        navigate("/", { replace: true });
+      })
+      .catch((err) => {
+        toast.error(err?.data?.message || "Could not decline invite.");
+        autoTriggered.current = false;
+      });
+  }
+// Fix: include all used values in dep array
+}, [info, action, isRightAccount, token, navigate, acceptInvite, declineInvite]);
 
+  
   // ── Manual handlers (fallback + wrong-account guard) ──────────
   const handleAccept = async () => {
     try {

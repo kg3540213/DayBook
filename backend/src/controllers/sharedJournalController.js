@@ -165,10 +165,14 @@ const declineInvite = async (req, res) => {
 // ── GET MY SHARED JOURNALS ────────────────────────────────────────
 const getMySharedJournals = async (req, res) => {
   const loggedUser = req.user;
-
   try {
     const journals = await SharedJournal.find({
-      $or: [{ owner: loggedUser._id }, { collaborator: loggedUser._id }],
+      $or: [
+        { owner: loggedUser._id },
+        { collaborator: loggedUser._id },
+        // Also show pending invites sent to this user's email
+        { inviteEmail: loggedUser.email, status: "pending" },
+      ],
     })
       .populate("owner",        "firstName lastName email profilePhoto")
       .populate("collaborator", "firstName lastName email profilePhoto")
@@ -176,7 +180,7 @@ const getMySharedJournals = async (req, res) => {
 
     res.status(200).json({
       message: "Shared journals fetched successfully!",
-      data:    journals,
+      data: journals,
     });
   } catch (error) {
     console.error("Error fetching shared journals:", error);

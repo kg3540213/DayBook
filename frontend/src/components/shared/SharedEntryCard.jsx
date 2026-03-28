@@ -1,20 +1,26 @@
 import { FaTrash, FaEdit } from "react-icons/fa";
-import { useDeleteSharedEntryMutation, useUpdateSharedEntryMutation } from "../../redux/api/sharedJournalApiSlice";
+import {
+  useDeleteSharedEntryMutation,
+  useUpdateSharedEntryMutation,
+} from "../../redux/api/sharedJournalApiSlice";
 import { toast } from "react-toastify";
 import { useState } from "react";
 
 // Strip HTML to plain text for card preview
 const stripHtml = (html) => {
   if (!html) return "";
-  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return html
+    .replace(/<[^>]+>/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
 };
 
 // ── Mood → card accent colour ──────────────────────────────────────
 const MOOD_THEME = {
-  "🙂": { border: "border-l-emerald-500/60",  badge: "badge-success" },
-  "😔": { border: "border-l-blue-500/60",     badge: "badge-info"    },
-  "😡": { border: "border-l-rose-500/60",     badge: "badge-error"   },
-  "😐": { border: "border-l-amber-500/60",    badge: "badge-warning" },
+  "🙂": { border: "border-l-emerald-500/60", badge: "badge-success" },
+  "😔": { border: "border-l-blue-500/60", badge: "badge-info" },
+  "😡": { border: "border-l-rose-500/60", badge: "badge-error" },
+  "😐": { border: "border-l-amber-500/60", badge: "badge-warning" },
 };
 
 const SharedEntryCard = ({
@@ -28,18 +34,21 @@ const SharedEntryCard = ({
   const [editContent, setEditContent] = useState(entry.content);
   const [editMood, setEditMood] = useState(entry.mood || "😐");
 
-  const [updateSharedEntry, { isLoading: updating }] = useUpdateSharedEntryMutation();
-  const [deleteSharedEntry, { isLoading: deleting }] = useDeleteSharedEntryMutation();
+  const [updateSharedEntry, { isLoading: updating }] =
+    useUpdateSharedEntryMutation();
+  const [deleteSharedEntry, { isLoading: deleting }] =
+    useDeleteSharedEntryMutation();
 
   const isAuthor = entry.author._id === currentUserId;
 
   const plainContent = stripHtml(entry.content);
-  const preview = plainContent.length > 240
-    ? `${plainContent.slice(0, 240)}…`
-    : plainContent;
+  const preview =
+    plainContent.length > 240 ? `${plainContent.slice(0, 240)}…` : plainContent;
 
   const formattedDate = new Date(entry.date).toLocaleDateString("default", {
-    day: "numeric", month: "long", year: "numeric",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
   });
 
   const theme = MOOD_THEME[entry.mood || "😐"] || MOOD_THEME["😐"];
@@ -58,6 +67,7 @@ const SharedEntryCard = ({
           title: editTitle,
           content: editContent,
           mood: editMood,
+          date: entry.date, // ADD THIS
         },
       }).unwrap();
       toast.success("Entry updated successfully");
