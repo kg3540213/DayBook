@@ -21,6 +21,7 @@ const entrySchema = new mongoose.Schema(
     contentFormat: {
       type:    String,
       enum:    ["plain", "html"],
+
       default: "plain",
     },
 
@@ -71,7 +72,7 @@ entrySchema.index(
 // TAGS INDEX — fast tag-based filtering
 // ------------------------------------------------------------------
 entrySchema.index({ createdBy: 1, tags: 1 }, { name: "entry_tags_index" });
-
+// 1 means ascending
 // ------------------------------------------------------------------
 // PINNED INDEX — fast pinned-first sorting
 // ------------------------------------------------------------------

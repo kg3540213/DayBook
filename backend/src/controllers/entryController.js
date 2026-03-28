@@ -440,6 +440,7 @@ const getMoodAnalytics = async (req, res) => {
       { $match: { createdBy: loggedUser._id } },
       { $group: { _id: "$mood", count: { $sum: 1 } } },
     ]);
+    console.log("Raw mood counts from DB:", moodCounts);
 
     const analytics = { "🙂": 0, "😔": 0, "😡": 0, "😐": 0 };
     moodCounts.forEach(({ _id, count }) => {
@@ -465,7 +466,7 @@ const getEntriesPerWeek = async (req, res) => {
   const loggedUser = req.user;
   const weeks      = Math.min(parseInt(req.query.weeks) || 8, 52);
   const cacheKey   = cache.keys.weekly(loggedUser._id, weeks);
-
+  // console.log(`Fetching weekly analytics for user ${loggedUser._id}, weeks: ${weeks}`);
   const cached = await cache.get(cacheKey);
   if (cached) return res.status(200).json({ ...cached, fromCache: true });
 

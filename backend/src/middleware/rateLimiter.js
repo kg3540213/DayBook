@@ -14,7 +14,7 @@ const makeLimiter = ({ windowMs, max, message }) =>
     legacyHeaders: false,
   });
 
-// ── Per-route limiters ────────────────────────────────────────────
+
 
 // Login — 5 attempts per 15 minutes per IP.
 // Throttles credential-stuffing and password-spray attacks.
