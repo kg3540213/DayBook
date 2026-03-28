@@ -1,5 +1,11 @@
+// frontend/src/pages/Signup.jsx
+// Fix: after successful OTP verification, navigate to ?redirect= URL
+// if one exists (e.g. the invite page), otherwise fall back to "/"
+// Also: Login link preserves the redirect param so the user can
+// switch between login/signup without losing the invite URL.
+
 import { useEffect, useRef, useState } from "react";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "react-toastify";
 import {
@@ -73,6 +79,10 @@ const Signup = () => {
   const dispatch     = useDispatch();
   const navigate     = useNavigate();
 
+  // ── FIX: read ?redirect= so we can bounce back after signup ──
+  const [searchParams] = useSearchParams();
+  const redirectTo = searchParams.get("redirect") || "/";
+
   const [step, setStep] = useState(pendingEmail ? "otp" : "form");
 
   const [formData, setFormData] = useState({
@@ -144,7 +154,8 @@ const Signup = () => {
       savePasswordToSession(passwordForEncryption);
       dispatch(setPendingEmail(null));
 
-      navigate("/");
+      // ── FIX: go to the invite page (or wherever redirect points) ──
+      navigate(redirectTo, { replace: true });
       toast.success(response.message);
     } catch (error) {
       toast.error(error?.data?.message || "Verification failed. Please try again.");
@@ -168,6 +179,12 @@ const Signup = () => {
     }
   };
 
+  // ── Build login href — preserve redirect so switching to login
+  //    doesn't drop the invite URL ────────────────────────────────
+  const loginHref = redirectTo && redirectTo !== "/"
+    ? `/login?redirect=${encodeURIComponent(redirectTo)}`
+    : "/login";
+
   // ── Render ─────────────────────────────────────────────────────
   return (
     <div className="min-h-[calc(100svh-64px-52px-40px)]">
@@ -186,6 +203,14 @@ const Signup = () => {
                 <h2 className="card-title block text-center text-lg mb-2">
                   Sign up to DayBook
                 </h2>
+
+                {/* Show hint if user arrived from an invite link */}
+                {redirectTo.includes("invite") && (
+                  <div className="alert alert-info rounded-xl text-xs py-2 mb-2">
+                    <span>📩</span>
+                    <span>Create an account to accept your journal invite.</span>
+                  </div>
+                )}
 
                 <form onSubmit={handleSignup}>
                   <div className="text-sm">
@@ -263,7 +288,8 @@ const Signup = () => {
 
                 <div className="text-center text-sm">
                   Already have an account?{" "}
-                  <Link to="/login" className="text-red-500 hover:font-bold">
+                  {/* FIX: preserve redirect on the login link */}
+                  <Link to={loginHref} className="text-red-500 hover:font-bold">
                     Log in
                   </Link>
                 </div>

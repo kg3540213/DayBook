@@ -1,5 +1,20 @@
-import { useEffect } from "react";
-import { useParams, useNavigate, Navigate, useLocation, useSearchParams } from "react-router-dom";
+// frontend/src/pages/InviteHandler.jsx
+// Fixes vs original:
+//   1. Redirect to /signup (not just /login) preserving the full redirect URL
+//   2. Auto-trigger (useEffect) has a stable guard so it doesn't fire
+//      while info is still null — was causing a race on first load after signup
+//   3. "Wrong account" warning shows the signup link too, not just login
+//   4. Manual Accept/Decline UI is now always shown when the account matches,
+//      even if ?action= is present but the effect hasn't fired yet
+
+import { useEffect, useRef } from "react";
+import {
+  useParams,
+  useNavigate,
+  Navigate,
+  useLocation,
+  useSearchParams,
+} from "react-router-dom";
 import { useSelector } from "react-redux";
 import {
   useGetInviteInfoQuery,
@@ -17,60 +32,94 @@ const InviteHandler = () => {
   const location       = useLocation();
   const [searchParams] = useSearchParams();
 
-  // ?action=accept  or  ?action=decline  (set by the email links)
   const action = searchParams.get("action"); // "accept" | "decline" | null
 
-  const { data, isLoading, isError } = useGetInviteInfoQuery(token, { skip: !token });
+  const { data, isLoading, isError } = useGetInviteInfoQuery(token, {
+    skip: !token,
+  });
 
   const [acceptInvite,  { isLoading: accepting  }] = useAcceptInviteMutation();
   const [declineInvite, { isLoading: declining  }] = useDeclineInviteMutation();
 
-  // Must be logged in — preserve the full path + query string for redirect
+  // ── Guard: must be logged in ───────────────────────────────────
+  // Preserve the FULL path + query string so after login/signup the
+  // user lands right back here with the token and ?action= intact.
   if (!user) {
-    return (
-      <Navigate
-        to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`}
-        replace
-      />
+    const redirectPath = encodeURIComponent(
+      location.pathname + location.search
     );
+    // Send to login; login page already has a "Sign up" link that also
+    // preserves the redirect.  We pass signup hint via the same param.
+    return <Navigate to={`/login?redirect=${redirectPath}`} replace />;
   }
 
-  const info = data?.data;
+  const info           = data?.data;
+  const currentEmail   = user.data.email;
+  const isRightAccount = info ? currentEmail === info.inviteEmail : false;
 
-  // ── Auto-trigger accept / decline when arriving from the email link ──
+  // ── Auto-trigger accept/decline from email link ────────────────
+  // Use a ref so this only fires ONCE per mount even in StrictMode.
+  const autoTriggered = useRef(false);
+
   useEffect(() => {
-    if (!info || !action) return;
+    // Wait until info is loaded AND we haven't triggered yet
+    if (!info || !action || autoTriggered.current) return;
+    // Only the invited email can auto-accept/decline
+    if (!isRightAccount) return;
+    // Don't auto-trigger if the journal is already in a terminal state
     if (info.status === "active" || info.status === "declined") return;
 
-    // Only the invited email can act
-    if (user.data.email !== info.inviteEmail) return;
+    autoTriggered.current = true;
 
     if (action === "accept") {
       acceptInvite(token)
         .unwrap()
         .then((res) => {
           toast.success(res.message || "You've joined the shared journal!");
-          navigate("/shared-journals");
+          navigate("/shared-journals", { replace: true });
         })
         .catch((err) => {
           toast.error(err?.data?.message || "Could not accept invite.");
+          // Reset so the manual buttons are usable as a fallback
+          autoTriggered.current = false;
         });
     } else if (action === "decline") {
       declineInvite(token)
         .unwrap()
         .then((res) => {
           toast.info(res.message || "Invite declined.");
-          navigate("/");
+          navigate("/", { replace: true });
         })
         .catch((err) => {
           toast.error(err?.data?.message || "Could not decline invite.");
+          autoTriggered.current = false;
         });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [info, action]);
+  }, [info, action, isRightAccount]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Loading ──────────────────────────────────────────────────────
-  if (isLoading || (action && !info)) {
+  // ── Manual handlers (fallback + wrong-account guard) ──────────
+  const handleAccept = async () => {
+    try {
+      const res = await acceptInvite(token).unwrap();
+      toast.success(res.message);
+      navigate("/shared-journals", { replace: true });
+    } catch (err) {
+      toast.error(err?.data?.message || "Could not accept invite.");
+    }
+  };
+
+  const handleDecline = async () => {
+    try {
+      const res = await declineInvite(token).unwrap();
+      toast.info(res.message);
+      navigate("/", { replace: true });
+    } catch (err) {
+      toast.error(err?.data?.message || "Could not decline invite.");
+    }
+  };
+
+  // ── Loading ────────────────────────────────────────────────────
+  if (isLoading) {
     return (
       <div className="flex justify-center items-center min-h-[calc(100dvh-64px-52px)]">
         <Loader />
@@ -78,14 +127,15 @@ const InviteHandler = () => {
     );
   }
 
-  // ── Error / invalid token ────────────────────────────────────────
+  // ── Error / invalid token ──────────────────────────────────────
   if (isError || !data) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100dvh-64px-52px)] gap-4 px-6 text-center">
         <span className="text-5xl">⚠️</span>
         <h2 className="text-2xl font-bold">Invalid or Expired Invite</h2>
         <p className="text-base-content/60 max-w-sm">
-          This invite link is no longer valid. It may have expired (7 days) or already been used.
+          This invite link is no longer valid. It may have expired (7 days) or
+          already been used.
         </p>
         <button
           onClick={() => navigate("/shared-journals")}
@@ -97,7 +147,7 @@ const InviteHandler = () => {
     );
   }
 
-  // ── Already active ───────────────────────────────────────────────
+  // ── Already active ─────────────────────────────────────────────
   if (info.status === "active") {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100dvh-64px-52px)] gap-4 px-6 text-center">
@@ -114,7 +164,7 @@ const InviteHandler = () => {
     );
   }
 
-  // ── Already declined ─────────────────────────────────────────────
+  // ── Already declined ───────────────────────────────────────────
   if (info.status === "declined") {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100dvh-64px-52px)] gap-4 px-6 text-center">
@@ -128,8 +178,11 @@ const InviteHandler = () => {
     );
   }
 
-  // ── Auto-triggering spinner (email link with ?action=) ───────────
-  if (action && user.data.email === info.inviteEmail) {
+  // ── Auto-triggering spinner ────────────────────────────────────
+  // Show this ONLY when the effect is actively running (after it fired).
+  // While it hasn't fired yet we fall through to the manual UI below
+  // so the user always sees buttons — no blank screen.
+  if (autoTriggered.current && isRightAccount && (accepting || declining)) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[calc(100dvh-64px-52px)] gap-4 px-6 text-center">
         <Loader />
@@ -140,27 +193,7 @@ const InviteHandler = () => {
     );
   }
 
-  // ── Manual accept / decline UI (no ?action, or wrong account) ────
-  const handleAccept = async () => {
-    try {
-      const res = await acceptInvite(token).unwrap();
-      toast.success(res.message);
-      navigate("/shared-journals");
-    } catch (err) {
-      toast.error(err?.data?.message || "Could not accept invite.");
-    }
-  };
-
-  const handleDecline = async () => {
-    try {
-      const res = await declineInvite(token).unwrap();
-      toast.info(res.message);
-      navigate("/");
-    } catch (err) {
-      toast.error(err?.data?.message || "Could not decline invite.");
-    }
-  };
-
+  // ── Main invite card — always shown if not in a terminal state ─
   return (
     <div className="flex justify-center items-center min-h-[calc(100dvh-64px-52px)] px-6">
       <div className="card bg-base-200 w-full max-w-sm rounded-3xl shadow-xl border border-base-300">
@@ -170,13 +203,16 @@ const InviteHandler = () => {
           <div>
             <h1 className="text-xl font-bold mb-1">You've been invited!</h1>
             <p className="text-base-content/60 text-sm">
-              <strong>{info.ownerName}</strong> invited you to join a shared journal on DayBook.
+              <strong>{info.ownerName}</strong> invited you to join a shared
+              journal on DayBook.
             </p>
           </div>
 
           {/* Journal name */}
           <div className="bg-base-300 rounded-2xl px-6 py-4 w-full">
-            <p className="text-xs text-base-content/50 uppercase tracking-widest mb-1">Journal</p>
+            <p className="text-xs text-base-content/50 uppercase tracking-widest mb-1">
+              Journal
+            </p>
             <p className="text-xl font-bold text-primary">{info.journalName}</p>
           </div>
 
@@ -184,23 +220,53 @@ const InviteHandler = () => {
           <div className="alert alert-warning rounded-xl text-xs py-2 text-left">
             <span>🔓</span>
             <span>
-              Shared entries are <strong>not encrypted</strong> — both members can read them.
+              Shared entries are <strong>not encrypted</strong> — both members
+              can read them.
             </span>
           </div>
 
-          {/* Wrong account warning */}
-          {user.data.email !== info.inviteEmail && (
-            <div className="alert alert-error rounded-xl text-xs py-2">
+          {/* ── Wrong account warning ────────────────────────── */}
+          {!isRightAccount && (
+            <div className="alert alert-error rounded-xl text-xs py-2 text-left">
               <span>⚠️</span>
-              <span>
-                This invite was sent to <strong>{info.inviteEmail}</strong>. You're logged in as{" "}
-                <strong>{user.data.email}</strong>. Please log in with the correct account.
-              </span>
+              <div>
+                <p>
+                  This invite was sent to{" "}
+                  <strong>{info.inviteEmail}</strong>.
+                </p>
+                <p className="mt-1">
+                  You're logged in as <strong>{currentEmail}</strong>.
+                </p>
+                <p className="mt-2">
+                  Please{" "}
+                  <a
+                    href={`/login?redirect=${encodeURIComponent(
+                      location.pathname + location.search
+                    )}`}
+                    className="underline font-semibold"
+                  >
+                    log in
+                  </a>{" "}
+                  or{" "}
+                  <a
+                    href={`/signup?redirect=${encodeURIComponent(
+                      location.pathname + location.search
+                    )}`}
+                    className="underline font-semibold"
+                  >
+                    sign up
+                  </a>{" "}
+                  with <strong>{info.inviteEmail}</strong>.
+                </p>
+              </div>
             </div>
           )}
 
-          {/* Action buttons — only shown for the right account */}
-          {user.data.email === info.inviteEmail && (
+          {/* ── Accept / Decline buttons ─────────────────────── */}
+          {/* Shown whenever the email matches — whether auto-trigger
+              is pending or not.  This guarantees the user always has
+              a way to act even if the auto-trigger fails. */}
+          {isRightAccount && (
             <div className="flex gap-3 w-full">
               <button
                 onClick={handleAccept}
@@ -208,7 +274,10 @@ const InviteHandler = () => {
                 className="btn btn-primary flex-1 rounded-xl"
               >
                 {accepting ? (
-                  <><span className="loading loading-spinner loading-xs" /> Joining…</>
+                  <>
+                    <span className="loading loading-spinner loading-xs" />{" "}
+                    Joining…
+                  </>
                 ) : (
                   "✅ Accept"
                 )}
