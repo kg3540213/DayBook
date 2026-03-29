@@ -7,8 +7,9 @@ const entriesApiSlice = apiSlice.injectEndpoints({
       invalidatesTags: ["Entries"],
     }),
 
+    // ── Fetch ALL entries (high limit) so client-side search works ──
     getEntries: builder.query({
-      query: () => "/entries",
+      query: () => "/entries?limit=1000",
       providesTags: ["Entries"],
     }),
 

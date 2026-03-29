@@ -1,14 +1,14 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { useGetEntriesQuery } from "../../redux/api/entriesApiSlice";
 import { decryptText } from "../../utils/crypto";
 import { FaMagic, FaTimes, FaSearch, FaKeyboard } from "react-icons/fa";
 
-// ── Semantic search (browser-only, Gemini direct) ─────────────────
+// ── Gemini config ─────────────────────────────────────────────────
 const GEMINI_URL =
   "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent";
-const MAX_CHARS = 500;
+const MAX_CHARS  = 500;
 const BATCH_SIZE = 25;
 
 const stripHtml = (html) =>
@@ -16,7 +16,10 @@ const stripHtml = (html) =>
 
 const buildPrompt = (query, entries) => {
   const list = entries
-    .map((e, i) => `[${i}] "${e.title}": ${e.plain.slice(0, MAX_CHARS)}`)
+    .map((e, i) => {
+      const plainText = (e.plain || e.plainContent || "").slice(0, MAX_CHARS);
+      return `[${i}] "${e.title}": ${plainText}`;
+    })
     .join("\n");
   return `You are a semantic search engine for a private journal app.
 Query: "${query}"
@@ -28,60 +31,108 @@ Include ALL entries. Irrelevant = 0.0. No markdown, no explanation.`;
 };
 
 const rankBatch = async (query, entries, apiKey) => {
-  const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: buildPrompt(query, entries) }] }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 800 },
-    }),
-  });
-  if (!res.ok) throw new Error(`Gemini ${res.status}`);
-  const data = await res.json();
-  const raw = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "[]";
-  try { return JSON.parse(raw.replace(/```json|```/g, "").trim()); }
-  catch { return entries.map((_, i) => ({ index: i, score: 0 })); }
+  if (!entries || entries.length === 0) {
+    return [];
+  }
+  
+  if (!apiKey) {
+    throw new Error("VITE_GEMINI_API_KEY is not configured. Add it to your frontend .env file.");
+  }
+
+  try {
+    const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: buildPrompt(query, entries) }] }],
+        generationConfig: { temperature: 0.1, maxOutputTokens: 800 },
+      }),
+    });
+    
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const errorMsg = err?.error?.message || `Gemini API error ${res.status}`;
+      console.error("[rankBatch]", errorMsg, err);
+      throw new Error(errorMsg);
+    }
+    
+    const data = await res.json();
+    
+    if (!data?.candidates?.[0]?.content?.parts?.[0]?.text) {
+      console.warn("[rankBatch] Unexpected Gemini response structure:", data);
+      return entries.map((_, i) => ({ index: i, score: 0 }));
+    }
+    
+    const raw = data.candidates[0].content.parts[0].text;
+    const cleaned = raw.replace(/```json|```/g, "").trim();
+    
+    try {
+      const parsed = JSON.parse(cleaned);
+      if (!Array.isArray(parsed)) {
+        console.warn("[rankBatch] Gemini response is not an array:", parsed);
+        return entries.map((_, i) => ({ index: i, score: 0 }));
+      }
+      return parsed;
+    } catch (parseErr) {
+      console.error("[rankBatch] Failed to parse JSON:", cleaned, parseErr);
+      return entries.map((_, i) => ({ index: i, score: 0 }));
+    }
+  } catch (err) {
+    console.error("[rankBatch] Search failed:", err);
+    throw err;
+  }
 };
 
 const MOOD_OPTIONS = [
-  { value: "", label: "All moods" },
-  { value: "🙂", label: "🙂 Happy" },
-  { value: "😔", label: "😔 Sad" },
-  { value: "😡", label: "😡 Angry" },
+  { value: "",   label: "All moods"  },
+  { value: "🙂", label: "🙂 Happy"   },
+  { value: "😔", label: "😔 Sad"     },
+  { value: "😡", label: "😡 Angry"   },
   { value: "😐", label: "😐 Neutral" },
 ];
 
 // ── Main SearchBox ────────────────────────────────────────────────
 const SearchBox = ({ toggle, expanded = false }) => {
-  const navigate = useNavigate();
+  const navigate     = useNavigate();
   const userPassword = useSelector((s) => s.user.userPassword);
-  const user = useSelector((s) => s.user.data);
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  const user         = useSelector((s) => s.user.data);
+  const apiKey       = import.meta.env.VITE_GEMINI_API_KEY;
 
   const { data: allEntriesData } = useGetEntriesQuery(undefined, { skip: !user });
   const allEntries = allEntriesData?.data ?? [];
 
-  // ── Modal state ───────────────────────────────────────────────
+  // ── Modal / tab state ─────────────────────────────────────────
   const [open, setOpen] = useState(false);
-  const [tab, setTab] = useState("classic"); // "classic" | "ai"
+  const [tab,  setTab]  = useState("classic");
 
   // ── Classic filter state ──────────────────────────────────────
-  const [text, setText] = useState("");
-  const [mood, setMood] = useState("");
+  const [text,     setText]     = useState("");
+  const [mood,     setMood]     = useState("");
   const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [tag, setTag] = useState("");
+  const [dateTo,   setDateTo]   = useState("");
+  const [tag,      setTag]      = useState("");
 
   // ── AI state ─────────────────────────────────────────────────
-  const [aiQuery, setAiQuery] = useState("");
-  const [aiResults, setAiResults] = useState(null); // null | []
+  // KEY FIX: store aiQuery in a ref as well as state.
+  // useCallback captured stale state; a plain async function reading
+  // from a ref always gets the latest value without needing deps.
+  const [aiQuery,   setAiQuery]   = useState("");
+  const [aiResults, setAiResults] = useState(null);
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiError, setAiError] = useState("");
+  const [aiError,   setAiError]   = useState("");
+  const aiQueryRef     = useRef("");   // always-fresh mirror of aiQuery
+  const allEntriesRef  = useRef([]);   // always-fresh mirror of allEntries
+  const userPasswordRef = useRef(null);
 
-  const inputRef = useRef(null);
+  const inputRef   = useRef(null);
   const aiInputRef = useRef(null);
 
-  // Focus input when modal opens
+  // Keep refs in sync
+  useEffect(() => { aiQueryRef.current      = aiQuery;      }, [aiQuery]);
+  useEffect(() => { allEntriesRef.current   = allEntries;   }, [allEntries]);
+  useEffect(() => { userPasswordRef.current = userPassword; }, [userPassword]);
+
+  // Focus on open
   useEffect(() => {
     if (!open) return;
     const t = setTimeout(() => {
@@ -90,7 +141,7 @@ const SearchBox = ({ toggle, expanded = false }) => {
     return () => clearTimeout(t);
   }, [open, tab]);
 
-  // Keyboard shortcut: Ctrl/Cmd+K
+  // Ctrl/Cmd+K
   useEffect(() => {
     const handler = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
@@ -113,11 +164,11 @@ const SearchBox = ({ toggle, expanded = false }) => {
   const handleClassicSubmit = (e) => {
     e?.preventDefault();
     const params = new URLSearchParams();
-    if (text.trim()) params.set("search", text.trim());
-    if (mood) params.set("mood", mood);
-    if (dateFrom) params.set("dateFrom", dateFrom);
-    if (dateTo) params.set("dateTo", dateTo);
-    if (tag.trim()) params.set("tag", tag.trim().toLowerCase());
+    if (text.trim())  params.set("search",  text.trim());
+    if (mood)         params.set("mood",     mood);
+    if (dateFrom)     params.set("dateFrom", dateFrom);
+    if (dateTo)       params.set("dateTo",   dateTo);
+    if (tag.trim())   params.set("tag",      tag.trim().toLowerCase());
     params.set("page", "1");
     const hasFilter = text.trim() || mood || dateFrom || dateTo || tag.trim();
     navigate(hasFilter ? `/entries?${params.toString()}` : "/entries");
@@ -133,33 +184,63 @@ const SearchBox = ({ toggle, expanded = false }) => {
   };
 
   // ── AI semantic search ────────────────────────────────────────
-  const runAiSearch = useCallback(async () => {
-    const q = aiQuery.trim();
-    if (!q) return;
-    if (!apiKey) { setAiError("VITE_GEMINI_API_KEY not set in .env"); return; }
-    if (!userPassword) { setAiError("Session expired — log out and back in."); return; }
+  // Plain async function (not useCallback) — reads from refs so it
+  // always has the latest query/entries/password without stale closures.
+  const runAiSearch = async () => {
+    const q        = aiQueryRef.current.trim();
+    const entries  = allEntriesRef.current;
+    const password = userPasswordRef.current;
+
+    if (!q) {
+      setAiError("Please type a search query first.");
+      return;
+    }
+    if (!apiKey) {
+      setAiError("VITE_GEMINI_API_KEY is not configured. Add it to your frontend .env file.");
+      return;
+    }
+    if (entries.length === 0) {
+      setAiError("No journal entries found. Write some entries first!");
+      return;
+    }
 
     setAiLoading(true);
     setAiError("");
     setAiResults(null);
 
     try {
-      // Decrypt in memory — plaintext never sent to backend
-      const plain = allEntries.map((e) => {
+      // Decrypt content in memory — never leaves the browser
+      const plain = entries.map((e) => {
         let p = e.content || "";
-        try { const d = decryptText(e.content, userPassword); if (d) p = d; } catch {}
-        return { ...e, plain: stripHtml(p) };
+        if (password && p) {
+          try {
+            const d = decryptText(p, password);
+            if (d) p = d;
+          } catch (decryptErr) {
+            console.warn("[runAiSearch] Decrypt failed for entry", e._id, decryptErr);
+            /* legacy plain-text entry — use as-is */
+          }
+        }
+        const plainContent = stripHtml(p);
+        if (!plainContent.trim()) {
+          console.warn("[runAiSearch] Entry has empty content:", e.title);
+        }
+        return { ...e, plain: plainContent };
       });
 
-      // Batch if needed
+      // Batch and send to Gemini
       const batches = [];
-      for (let i = 0; i < plain.length; i += BATCH_SIZE)
+      for (let i = 0; i < plain.length; i += BATCH_SIZE) {
         batches.push(plain.slice(i, i + BATCH_SIZE));
+      }
 
       const batchResults = await Promise.all(
         batches.map((batch, bi) =>
           rankBatch(q, batch, apiKey).then((scores) =>
-            scores.map((s) => ({ globalIndex: bi * BATCH_SIZE + s.index, score: s.score }))
+            scores.map((s) => ({
+              globalIndex: bi * BATCH_SIZE + s.index,
+              score: s.score,
+            }))
           )
         )
       );
@@ -171,26 +252,30 @@ const SearchBox = ({ toggle, expanded = false }) => {
 
       const sorted = plain
         .map((e, i) => ({ ...e, _score: scoreMap[i] ?? 0 }))
-        .sort((a, b) => b._score - a._score)
-        .filter((e) => e._score > 0.05); // hide truly irrelevant
+        .sort((a, b) => b._score - a._score);
 
-      setAiResults(sorted);
+      // Always show top 10; also include extras above 0.15
+      const top10  = sorted.slice(0, 10);
+      const extras = sorted.slice(10).filter((e) => e._score > 0.15);
+      setAiResults([...top10, ...extras]);
+
     } catch (err) {
-      setAiError(err.message || "Semantic search failed.");
+      console.error("[runAiSearch] Error:", err);
+      const msg = err?.message || err?.toString?.() || "Semantic search failed. Check your Gemini API key and network.";
+      setAiError(msg);
     } finally {
       setAiLoading(false);
     }
-  }, [aiQuery, apiKey, userPassword, allEntries]);
+  };
 
-  // Navigate to entry via search
+  // Navigate to entry by title (works with fixed Entries.jsx)
   const goToEntry = (title) => {
     navigate(`/entries?search=${encodeURIComponent(title)}&page=1`);
     closeModal();
     toggle?.();
   };
 
-  // ── Trigger button (navbar) ───────────────────────────────────
-  // In sidebar expanded mode, render the classic inline form (unchanged behaviour)
+  // ── Sidebar expanded mode ─────────────────────────────────────
   if (expanded) {
     return (
       <form onSubmit={handleClassicSubmit} className="flex flex-col gap-3 mb-4">
@@ -228,10 +313,10 @@ const SearchBox = ({ toggle, expanded = false }) => {
     );
   }
 
-  // ── Navbar trigger button ─────────────────────────────────────
+  // ── Navbar mode ───────────────────────────────────────────────
   return (
     <>
-      {/* ── Trigger button ───────────────────────────────────── */}
+      {/* Trigger button */}
       <button
         type="button"
         onClick={() => setOpen(true)}
@@ -248,11 +333,10 @@ const SearchBox = ({ toggle, expanded = false }) => {
           <kbd className="kbd kbd-xs opacity-50 group-hover:opacity-80 transition-opacity">⌘</kbd>
           <kbd className="kbd kbd-xs opacity-50 group-hover:opacity-80 transition-opacity">K</kbd>
         </span>
-        {/* Subtle shimmer line at bottom */}
         <span className="absolute bottom-0 left-4 right-4 h-px bg-gradient-to-r from-transparent via-primary/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
       </button>
 
-      {/* ── Full-screen modal ─────────────────────────────────── */}
+      {/* Modal */}
       {open && (
         <div
           className="fixed inset-0 z-50 flex items-start justify-center pt-[10vh] px-4"
@@ -260,70 +344,47 @@ const SearchBox = ({ toggle, expanded = false }) => {
           onMouseDown={(e) => { if (e.target === e.currentTarget) closeModal(); }}
         >
           <div
-            className="w-full max-w-2xl rounded-2xl bg-base-100 border border-base-content/10 shadow-2xl
-              flex flex-col overflow-hidden"
+            className="w-full max-w-2xl rounded-2xl bg-base-100 border border-base-content/10 shadow-2xl flex flex-col overflow-hidden"
             style={{ maxHeight: "80vh" }}
           >
-            {/* ── Header ─────────────────────────────────────── */}
+            {/* Header */}
             <div className="flex items-center gap-3 px-4 pt-4 pb-3 border-b border-base-content/8">
-              {/* Tab pills */}
               <div className="flex items-center gap-1 bg-base-200 rounded-xl p-1">
-                <button
-                  type="button"
-                  onClick={() => setTab("classic")}
+                <button type="button" onClick={() => setTab("classic")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 ${
-                    tab === "classic"
-                      ? "bg-base-100 text-base-content shadow-sm"
-                      : "text-base-content/50 hover:text-base-content/80"
+                    tab === "classic" ? "bg-base-100 text-base-content shadow-sm" : "text-base-content/50 hover:text-base-content/80"
                   }`}
                 >
-                  <FaSearch className="text-[10px]" />
-                  Classic
+                  <FaSearch className="text-[10px]" /> Classic
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setTab("ai")}
+                <button type="button" onClick={() => setTab("ai")}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 ${
-                    tab === "ai"
-                      ? "bg-primary text-primary-content shadow-sm"
-                      : "text-base-content/50 hover:text-base-content/80"
+                    tab === "ai" ? "bg-primary text-primary-content shadow-sm" : "text-base-content/50 hover:text-base-content/80"
                   }`}
                 >
-                  <FaMagic className="text-[10px]" />
-                  AI Search
+                  <FaMagic className="text-[10px]" /> AI Search
                 </button>
               </div>
-
               <div className="flex-1" />
-
-              {/* Keyboard hint */}
               <span className="hidden sm:flex items-center gap-1 text-[10px] text-base-content/30">
                 <FaKeyboard className="text-[10px]" />
                 <kbd className="kbd kbd-xs">Esc</kbd> to close
               </span>
-
-              <button
-                type="button"
-                onClick={closeModal}
-                className="btn btn-ghost btn-xs btn-circle text-base-content/40 hover:text-base-content"
-              >
+              <button type="button" onClick={closeModal}
+                className="btn btn-ghost btn-xs btn-circle text-base-content/40 hover:text-base-content">
                 <FaTimes className="text-xs" />
               </button>
             </div>
 
-            {/* ── Classic tab ─────────────────────────────────── */}
+            {/* Classic tab */}
             {tab === "classic" && (
-              <div className="flex flex-col gap-0 overflow-y-auto">
-                {/* Main search input */}
+              <div className="flex flex-col overflow-y-auto">
                 <div className="px-4 pt-4 pb-3">
                   <div className="relative">
                     <FaSearch className="absolute left-3.5 top-1/2 -translate-y-1/2 text-base-content/30 text-sm" />
-                    <input
-                      ref={inputRef}
-                      type="text"
-                      value={text}
+                    <input ref={inputRef} type="text" value={text}
                       onChange={(e) => setText(e.target.value)}
-                      onKeyDown={(e) => e.key === "Enter" && handleClassicSubmit()}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleClassicSubmit(); } }}
                       placeholder="Search by title or content…"
                       className="input w-full pl-10 rounded-xl bg-base-200 border-transparent focus:border-primary/40 text-sm"
                     />
@@ -335,26 +396,18 @@ const SearchBox = ({ toggle, expanded = false }) => {
                     )}
                   </div>
                 </div>
-
-                {/* Filter grid */}
                 <div className="px-4 pb-4 grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs text-base-content/50 font-medium">Tag</label>
-                    <input
-                      type="text"
-                      value={tag}
-                      onChange={(e) => setTag(e.target.value)}
+                    <input type="text" value={tag} onChange={(e) => setTag(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); handleClassicSubmit(); } }}
                       placeholder="e.g. college"
-                      className="input input-sm rounded-xl bg-base-200 border-transparent focus:border-primary/40"
-                    />
+                      className="input input-sm rounded-xl bg-base-200 border-transparent focus:border-primary/40" />
                   </div>
                   <div className="flex flex-col gap-1.5">
                     <label className="text-xs text-base-content/50 font-medium">Mood</label>
-                    <select
-                      value={mood}
-                      onChange={(e) => setMood(e.target.value)}
-                      className="select select-sm rounded-xl bg-base-200 border-transparent focus:border-primary/40"
-                    >
+                    <select value={mood} onChange={(e) => setMood(e.target.value)}
+                      className="select select-sm rounded-xl bg-base-200 border-transparent focus:border-primary/40">
                       {MOOD_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                     </select>
                   </div>
@@ -369,8 +422,6 @@ const SearchBox = ({ toggle, expanded = false }) => {
                       className="input input-sm rounded-xl bg-base-200 border-transparent focus:border-primary/40" />
                   </div>
                 </div>
-
-                {/* Action row */}
                 <div className="px-4 pb-4 flex gap-2 border-t border-base-content/5 pt-3">
                   <button type="button" onClick={handleClassicSubmit}
                     className="btn btn-primary btn-sm flex-1 rounded-xl gap-1.5">
@@ -384,160 +435,120 @@ const SearchBox = ({ toggle, expanded = false }) => {
               </div>
             )}
 
-            {/* ── AI Semantic tab ──────────────────────────────── */}
+            {/* AI tab */}
             {tab === "ai" && (
               <div className="flex flex-col overflow-hidden flex-1">
-                {/* Query input */}
                 <div className="px-4 pt-4 pb-3">
-                  <div className="relative">
-                    {/* Animated gradient border when loading */}
-                    <div className={`absolute inset-0 rounded-xl transition-opacity duration-300 pointer-events-none ${
-                      aiLoading ? "opacity-100" : "opacity-0"
-                    }`} style={{
-                      background: "linear-gradient(90deg, oklch(var(--p)/0.4), oklch(var(--s)/0.4), oklch(var(--p)/0.4))",
-                      backgroundSize: "200% 100%",
-                      animation: aiLoading ? "shimmer 1.5s linear infinite" : "none",
-                      padding: "1px",
-                      borderRadius: "0.75rem",
-                    }} />
-
-                    <div className="relative flex gap-2 items-center bg-base-200 rounded-xl px-3.5 py-2.5">
-                      <FaMagic className={`text-xs shrink-0 transition-colors duration-300 ${
-                        aiLoading ? "text-primary animate-pulse" : "text-primary/60"
-                      }`} />
-                      <input
-                        ref={aiInputRef}
-                        type="text"
-                        value={aiQuery}
-                        onChange={(e) => setAiQuery(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && runAiSearch()}
-                        placeholder="Describe what you're looking for…"
-                        className="flex-1 bg-transparent outline-none text-sm placeholder:text-base-content/30"
-                      />
-                      {aiQuery && !aiLoading && (
-                        <button type="button" onClick={() => { setAiQuery(""); setAiResults(null); setAiError(""); }}
-                          className="text-base-content/30 hover:text-base-content transition-colors">
-                          <FaTimes className="text-xs" />
-                        </button>
-                      )}
-                    </div>
+                  {/* Input */}
+                  <div className="flex gap-2 items-center bg-base-200 rounded-xl px-3.5 py-2.5">
+                    <FaMagic className={`text-xs shrink-0 ${aiLoading ? "text-primary animate-pulse" : "text-primary/60"}`} />
+                    <input
+                      ref={aiInputRef}
+                      type="text"
+                      value={aiQuery}
+                      onChange={(e) => {
+                        setAiQuery(e.target.value);
+                        aiQueryRef.current = e.target.value;
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          runAiSearch();
+                        }
+                      }}
+                      placeholder="Describe what you're looking for…"
+                      className="flex-1 bg-transparent outline-none text-sm placeholder:text-base-content/30"
+                    />
+                    {aiQuery && !aiLoading && (
+                      <button type="button"
+                        onClick={() => { setAiQuery(""); aiQueryRef.current = ""; setAiResults(null); setAiError(""); }}
+                        className="text-base-content/30 hover:text-base-content">
+                        <FaTimes className="text-xs" />
+                      </button>
+                    )}
                   </div>
 
-                  {/* Example queries */}
+                  {/* Example chips */}
                   {!aiResults && !aiLoading && !aiError && (
                     <div className="mt-3 flex flex-wrap gap-1.5">
-                      {[
-                        "days I felt stressed about exams",
-                        "happy memories with friends",
-                        "times I was proud of myself",
-                        "when I felt lonely",
-                      ].map((ex) => (
-                        <button
-                          key={ex}
-                          type="button"
-                          onClick={() => { setAiQuery(ex); }}
-                          className="badge badge-ghost badge-sm hover:badge-primary cursor-pointer transition-all text-xs"
-                        >
+                      {["days I felt stressed about exams", "happy memories with friends", "times I was proud of myself", "when I felt lonely"].map((ex) => (
+                        <button key={ex} type="button"
+                          onClick={() => { setAiQuery(ex); aiQueryRef.current = ex; }}
+                          className="badge badge-ghost badge-sm hover:badge-primary cursor-pointer text-xs">
                           {ex}
                         </button>
                       ))}
                     </div>
                   )}
 
-                  {/* Privacy note */}
                   <p className="mt-2.5 text-[10px] text-base-content/30 flex items-center gap-1">
                     <span className="inline-block w-1.5 h-1.5 rounded-full bg-success" />
                     Plaintext stays in your browser — never sent to the server
                   </p>
                 </div>
 
-                {/* Search button */}
+                {/* Search button — disabled only while loading, NOT based on query length */}
                 <div className="px-4 pb-3">
                   <button
                     type="button"
-                    onClick={runAiSearch}
-                    disabled={aiLoading || !aiQuery.trim()}
+                    disabled={aiLoading}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); runAiSearch(); }}
                     className="btn btn-primary btn-sm w-full rounded-xl gap-2"
                   >
-                    {aiLoading ? (
-                      <><span className="loading loading-spinner loading-xs" /> Gemini is reading your journal…</>
-                    ) : (
-                      <><FaMagic className="text-xs" /> Search with AI</>
-                    )}
+                    {aiLoading
+                      ? <><span className="loading loading-spinner loading-xs" /> Gemini is reading your journal…</>
+                      : <><FaMagic className="text-xs" /> Search with AI</>
+                    }
                   </button>
                 </div>
 
                 {/* Error */}
                 {aiError && (
-                  <div className="mx-4 mb-3 alert alert-error alert-sm rounded-xl py-2 text-xs">
-                    {aiError}
-                  </div>
+                  <div className="mx-4 mb-3 alert alert-error rounded-xl py-2 text-xs">{aiError}</div>
                 )}
 
                 {/* Results */}
                 {aiResults !== null && (
                   <div className="overflow-y-auto flex-1 px-2 pb-3">
                     {aiResults.length === 0 ? (
-                      <p className="text-center text-base-content/40 text-sm py-8">
-                        No relevant entries found for that query.
-                      </p>
+                      <p className="text-center text-base-content/40 text-sm py-8">No results. Try rephrasing your query.</p>
                     ) : (
                       <>
                         <p className="text-[10px] text-base-content/30 px-2 pb-2">
-                          {aiResults.length} entries ranked by relevance
+                          {aiResults.length} entries ranked by relevance — click to open
                         </p>
                         <ul className="flex flex-col gap-1">
                           {aiResults.map((entry) => {
                             const pct = Math.round((entry._score ?? 0) * 100);
-                            const scoreColor =
-                              pct >= 70 ? "bg-success" :
-                              pct >= 40 ? "bg-warning" : "bg-base-content/20";
-                            const date = new Date(entry.date).toLocaleDateString("default", {
-                              day: "numeric", month: "short", year: "numeric",
-                            });
+                            const scoreColor = pct >= 70 ? "bg-success" : pct >= 40 ? "bg-warning" : "bg-base-content/20";
+                            const date = new Date(entry.date).toLocaleDateString("default", { day: "numeric", month: "short", year: "numeric" });
                             return (
                               <li key={entry._id}>
-                                <button
-                                  type="button"
-                                  onClick={() => goToEntry(entry.title)}
-                                  className="w-full text-left flex items-center gap-3 px-3 py-2.5
-                                    hover:bg-base-200 rounded-xl transition-colors group"
-                                >
-                                  {/* Score bar */}
+                                <button type="button" onClick={() => goToEntry(entry.title)}
+                                  className="w-full text-left flex items-center gap-3 px-3 py-2.5 hover:bg-base-200 rounded-xl transition-colors group">
                                   <div className="flex flex-col items-center gap-1 shrink-0 w-8">
                                     <span className="text-xs font-bold text-base-content/60">{pct}%</span>
                                     <div className="w-1.5 h-8 bg-base-300 rounded-full overflow-hidden">
-                                      <div
-                                        className={`w-full rounded-full transition-all duration-500 ${scoreColor}`}
-                                        style={{ height: `${pct}%`, marginTop: `${100 - pct}%` }}
-                                      />
+                                      <div className={`w-full rounded-full ${scoreColor}`}
+                                        style={{ height: `${pct}%`, marginTop: `${100 - pct}%` }} />
                                     </div>
                                   </div>
-
-                                  {/* Entry info */}
                                   <div className="flex-1 min-w-0">
                                     <p className="text-sm font-medium truncate flex items-center gap-1.5">
-                                      <span>{entry.mood}</span>
-                                      <span>{entry.title}</span>
+                                      <span>{entry.mood}</span><span>{entry.title}</span>
                                     </p>
                                     <p className="text-xs text-base-content/40 mt-0.5 truncate">
                                       {date}
                                       {(entry.tags ?? []).length > 0 && (
-                                        <span className="ml-2">
-                                          {entry.tags.slice(0, 2).map((t) => `#${t}`).join(" ")}
-                                        </span>
+                                        <span className="ml-2">{entry.tags.slice(0, 2).map((t) => `#${t}`).join(" ")}</span>
                                       )}
                                     </p>
                                     {entry.plain && (
-                                      <p className="text-xs text-base-content/40 mt-0.5 truncate">
-                                        {entry.plain.slice(0, 80)}…
-                                      </p>
+                                      <p className="text-xs text-base-content/40 mt-0.5 truncate">{entry.plain.slice(0, 80)}…</p>
                                     )}
                                   </div>
-
-                                  <span className="text-base-content/20 group-hover:text-base-content/50 transition-colors text-xs shrink-0">
-                                    →
-                                  </span>
+                                  <span className="text-base-content/20 group-hover:text-base-content/50 text-xs shrink-0">→</span>
                                 </button>
                               </li>
                             );
@@ -552,14 +563,6 @@ const SearchBox = ({ toggle, expanded = false }) => {
           </div>
         </div>
       )}
-
-      {/* Shimmer keyframe */}
-      <style>{`
-        @keyframes shimmer {
-          0% { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
-        }
-      `}</style>
     </>
   );
 };

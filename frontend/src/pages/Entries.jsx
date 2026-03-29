@@ -64,6 +64,22 @@ const Pagination = ({ page, totalPages, totalEntries, onPageChange }) => {
   );
 };
 
+// ── Helper: try to decrypt, fall back to raw ciphertext ──────────
+const safeDecrypt = (content, password) => {
+  if (!content) return "";
+  if (!password) return content; // no password = return raw (may be unencrypted legacy entry)
+  try {
+    const result = decryptText(content, password);
+    return result || content;
+  } catch {
+    return content; // decryption failed — treat as plain text (legacy entry)
+  }
+};
+
+// ── Helper: strip HTML tags to plain text ─────────────────────────
+const stripHtml = (html) =>
+  (html || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+
 // ── Main ──────────────────────────────────────────────────────────
 const Entries = () => {
   const user         = useSelector((s) => s.user.data);
@@ -82,15 +98,14 @@ const Entries = () => {
   const page       = Math.max(1, parseInt(searchParams.get("page") || "1"));
 
   const isSearchActive  = !!(searchText || mood || dateFrom || dateTo || tag || pinned);
-  const hasServerFilter = !!(mood || dateFrom || dateTo);
 
-  const { data: allEntriesData, isLoading: isLoadingAll } = useGetEntriesQuery();
-  const { data: searchData, isLoading: isLoadingSearch }  = useSearchEntryQuery(
-    { text: searchText, mood, dateFrom, dateTo, page, limit: 10 },
-    { skip: !hasServerFilter }
-  );
-
-  const isLoading = isLoadingAll || (hasServerFilter && isLoadingSearch);
+  // ── Always do client-side filtering from the full entries list ──
+  // We no longer rely on the server search endpoint for the main results
+  // because getEntries now fetches all entries (limit=1000).
+  // The server searchEntry query is kept only as a fallback for very
+  // specific server-side filters (mood + date combined), but the
+  // primary path is always client-side for instant, accurate results.
+  const { data: allEntriesData, isLoading } = useGetEntriesQuery();
 
   const allEntries = allEntriesData?.data ?? [];
 
@@ -103,55 +118,62 @@ const Entries = () => {
       .map(([t]) => t);
   }, [allEntries]);
 
+  // ── Client-side filtering (works on ALL entries) ──────────────
   const allFilteredEntries = useMemo(() => {
     if (isLoading) return [];
 
-    let base = hasServerFilter ? (searchData?.data ?? []) : allEntries;
+    let base = [...allEntries];
 
-    if (pinned) base = base.filter((e) => e.isPinned);
-    if (tag)    base = base.filter((e) => (e.tags ?? []).includes(tag));
-
-    if (searchText && userPassword) {
-      const needle = searchText.trim().toLowerCase();
-      if (!hasServerFilter) {
-        base = allEntries.filter((entry) => {
-          if (pinned && !entry.isPinned) return false;
-          if (tag && !(entry.tags ?? []).includes(tag)) return false;
-          if (entry.title.toLowerCase().includes(needle)) return true;
-          try {
-            const plain = decryptText(entry.content, userPassword);
-            return plain.toLowerCase().includes(needle);
-          } catch { return false; }
-        });
-      } else {
-        const serverIds   = new Set(base.map((e) => e._id));
-        const fromMs = dateFrom ? new Date(dateFrom).getTime() : null;
-        const toDate = dateTo ? new Date(dateTo) : null;
-        if (toDate) toDate.setUTCHours(23, 59, 59, 999);
-        const toMs = toDate ? toDate.getTime() : null;
-        const extraMatches = allEntries.filter((entry) => {
-          if (serverIds.has(entry._id)) return false;
-          if (pinned && !entry.isPinned) return false;
-          if (tag && !(entry.tags ?? []).includes(tag)) return false;
-          const entryMs = new Date(entry.date).getTime();
-          if (fromMs !== null && entryMs < fromMs) return false;
-          if (toMs   !== null && entryMs > toMs)   return false;
-          if (mood && entry.mood !== mood) return false;
-          try {
-            const plain = decryptText(entry.content, userPassword);
-            return plain.toLowerCase().includes(needle);
-          } catch { return false; }
-        });
-        base = [...base, ...extraMatches];
-      }
+    // 1. Mood filter
+    if (mood) {
+      base = base.filter((e) => e.mood === mood);
     }
 
-    return [...base].sort((a, b) => {
+    // 2. Pinned filter
+    if (pinned) {
+      base = base.filter((e) => e.isPinned);
+    }
+
+    // 3. Tag filter
+    if (tag) {
+      base = base.filter((e) => (e.tags ?? []).includes(tag));
+    }
+
+    // 4. Date range filter
+    if (dateFrom || dateTo) {
+      const fromMs = dateFrom ? new Date(dateFrom).getTime() : null;
+      const toDate = dateTo ? new Date(dateTo) : null;
+      if (toDate) toDate.setUTCHours(23, 59, 59, 999);
+      const toMs = toDate ? toDate.getTime() : null;
+
+      base = base.filter((e) => {
+        const entryMs = new Date(e.date).getTime();
+        if (fromMs !== null && entryMs < fromMs) return false;
+        if (toMs   !== null && entryMs > toMs)   return false;
+        return true;
+      });
+    }
+
+    // 5. Text search — check title first (fast), then decrypt+search content
+    if (searchText.trim()) {
+      const needle = searchText.trim().toLowerCase();
+      base = base.filter((entry) => {
+        // Always check title — no decryption needed
+        if (entry.title.toLowerCase().includes(needle)) return true;
+
+        // Check decrypted content
+        const plainContent = stripHtml(safeDecrypt(entry.content, userPassword));
+        return plainContent.toLowerCase().includes(needle);
+      });
+    }
+
+    // 6. Sort: pinned first, then newest date
+    return base.sort((a, b) => {
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
       return new Date(b.date) - new Date(a.date);
     });
-  }, [isLoading, hasServerFilter, searchData, allEntries, pinned, tag, searchText, userPassword, mood, dateFrom, dateTo]);
+  }, [isLoading, allEntries, mood, pinned, tag, dateFrom, dateTo, searchText, userPassword]);
 
   const totalEntries = allFilteredEntries.length;
   const totalPages   = Math.max(1, Math.ceil(totalEntries / ENTRIES_PER_PAGE));
