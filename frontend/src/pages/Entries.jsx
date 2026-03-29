@@ -84,7 +84,6 @@ const Entries = () => {
   const isSearchActive  = !!(searchText || mood || dateFrom || dateTo || tag || pinned);
   const hasServerFilter = !!(mood || dateFrom || dateTo);
 
-  // ── Server-side filters (mood / date) still work via existing /search ──
   const { data: allEntriesData, isLoading: isLoadingAll } = useGetEntriesQuery();
   const { data: searchData, isLoading: isLoadingSearch }  = useSearchEntryQuery(
     { text: searchText, mood, dateFrom, dateTo, page, limit: 10 },
@@ -93,14 +92,9 @@ const Entries = () => {
 
   const isLoading = isLoadingAll || (hasServerFilter && isLoadingSearch);
 
-  // ── Derive tag suggestions from all entries ───────────────────────
-  const allEntries    = allEntriesData?.data ?? [];
-  console.log("[Entries] Full API response data:", allEntriesData);
-  console.log("[Entries] Extracted allEntries:", allEntries);
-  if (allEntries.length > 0) {
-    console.log("[Entries] First entry structure:", allEntries[0]);
-  }
-  const popularTags   = useMemo(() => {
+  const allEntries = allEntriesData?.data ?? [];
+
+  const popularTags = useMemo(() => {
     const counts = {};
     allEntries.forEach((e) => (e.tags ?? []).forEach((t) => { counts[t] = (counts[t] ?? 0) + 1; }));
     return Object.entries(counts)
@@ -109,24 +103,17 @@ const Entries = () => {
       .map(([t]) => t);
   }, [allEntries]);
 
-  // ── Client-side filtering ─────────────────────────────────────────
   const allFilteredEntries = useMemo(() => {
     if (isLoading) return [];
 
-    // Base: server already filtered by mood/date; otherwise use full list
     let base = hasServerFilter ? (searchData?.data ?? []) : allEntries;
 
-    // Pinned filter (client-side)
     if (pinned) base = base.filter((e) => e.isPinned);
+    if (tag)    base = base.filter((e) => (e.tags ?? []).includes(tag));
 
-    // Tag filter (client-side)
-    if (tag) base = base.filter((e) => (e.tags ?? []).includes(tag));
-
-    // Keyword — title search is cheap; content search requires decryption
     if (searchText && userPassword) {
       const needle = searchText.trim().toLowerCase();
       if (!hasServerFilter) {
-        // Full client-side: search title + decrypted content
         base = allEntries.filter((entry) => {
           if (pinned && !entry.isPinned) return false;
           if (tag && !(entry.tags ?? []).includes(tag)) return false;
@@ -137,7 +124,6 @@ const Entries = () => {
           } catch { return false; }
         });
       } else {
-        // Server filtered by mood/date; additionally match keyword in content
         const serverIds   = new Set(base.map((e) => e._id));
         const fromMs = dateFrom ? new Date(dateFrom).getTime() : null;
         const toDate = dateTo ? new Date(dateTo) : null;
@@ -160,7 +146,6 @@ const Entries = () => {
       }
     }
 
-    // Pinned-first sort (same as backend sort)
     return [...base].sort((a, b) => {
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
@@ -168,7 +153,6 @@ const Entries = () => {
     });
   }, [isLoading, hasServerFilter, searchData, allEntries, pinned, tag, searchText, userPassword, mood, dateFrom, dateTo]);
 
-  // ── Pagination ────────────────────────────────────────────────────
   const totalEntries = allFilteredEntries.length;
   const totalPages   = Math.max(1, Math.ceil(totalEntries / ENTRIES_PER_PAGE));
   const safePage     = Math.min(page, totalPages);
@@ -201,7 +185,6 @@ const Entries = () => {
     );
   }
 
-  // ── Empty state ───────────────────────────────────────────────────
   if (allFilteredEntries.length === 0) {
     return (
       <div className="relative text-center mt-10 mx-7 pb-24" style={{ minHeight: "calc(100dvh - 64px - 52px)" }}>
@@ -223,7 +206,6 @@ const Entries = () => {
     );
   }
 
-  // ── Normal render ─────────────────────────────────────────────────
   return (
     <div className="flex flex-col pb-24" style={{ minHeight: "calc(100dvh - 64px - 52px)" }}>
       <div className="fixed bottom-20 right-8 z-10"><AddEntry /></div>
@@ -233,10 +215,8 @@ const Entries = () => {
           <ActiveFilters search={searchText} mood={mood} dateFrom={dateFrom} dateTo={dateTo} tag={tag} pinned={pinned} onClear={handleClearFilters} />
         )}
 
-        {/* ── Quick-filter bar: Pinned + popular tags ─────────── */}
         {(popularTags.length > 0 || allEntries.some((e) => e.isPinned)) && (
           <div className="flex flex-wrap gap-2 mb-4">
-            {/* Pinned toggle */}
             {allEntries.some((e) => e.isPinned) && (
               <button
                 onClick={() => setFilter("pinned", pinned ? "" : "true")}
@@ -245,7 +225,6 @@ const Entries = () => {
                 <FaThumbtack className="text-[10px]" /> Pinned
               </button>
             )}
-            {/* Tag pills */}
             {popularTags.map((t) => (
               <button
                 key={t}
@@ -266,7 +245,6 @@ const Entries = () => {
         </p>
       </div>
 
-      {/* ── 3-column entry grid ──────────────────────────────────── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 px-7 my-4">
         {pageEntries.map((entry) => (
           <EntryCard
