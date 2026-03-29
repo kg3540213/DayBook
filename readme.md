@@ -14,8 +14,6 @@ A private, secure journaling app built exclusively for **LPU (Lovely Professiona
 - **🔍 Smart Search** — Search across titles and encrypted content by keyword, mood, or date range
 - **🖼️ Profile Photo** — Upload a profile picture stored on Cloudinary; displayed on the home page and navbar
 - **📄 Pagination** — Entries page shows 6 entries per page (3 per row) with Prev/Next navigation
-- **📖 Shared Journals** — Create shared journals with friends, invite via email, and collaborate on entries
-- **👥 Collaborative Entries** — Add entries to shared journals that all participants can view and edit
 - **🎓 LPU-Only Access** — Only `@lpu.in` email addresses can register. Invalid domains are rejected instantly on both the frontend and backend
 - **✉️ OTP Verification** — Email-based 6-digit OTP sent on signup. Unverified accounts cannot log in
 - **🔑 JWT Auth** — Secure `httpOnly` cookie-based JWT authentication with 7-day expiry
@@ -64,20 +62,16 @@ daybook/
 │       ├── controllers/
 │       │   ├── authController.js
 │       │   ├── entryController.js
-│       │   ├── sharedJournalController.js
 │       │   └── userController.js
 │       ├── middleware/
 │       │   ├── authMiddleware.js
 │       │   └── rateLimiter.js
 │       ├── models/
 │       │   ├── entryModel.js
-│       │   ├── sharedEntryModel.js
-│       │   ├── sharedJournalModel.js
 │       │   └── userModel.js
 │       ├── routes/
 │       │   ├── authRoutes.js
 │       │   ├── entryRoutes.js
-│       │   ├── sharedJournalRoutes.js
 │       │   └── userRoutes.js
 │       ├── services/
 │       │   ├── EmailService.js
@@ -111,34 +105,25 @@ daybook/
         │   │   ├── EditEntry.jsx
         │   │   ├── EntryCard.jsx
         │   │   └── ReadMore.jsx
-        │   ├── navbar/
-        │   │   ├── Navbar.jsx
-        │   │   ├── NavLinks.jsx
-        │   │   ├── NavProfile.jsx
-        │   │   └── SearchBox.jsx
-        │   └── shared/
-        │       ├── AddSharedEntry.jsx
-        │       ├── CreateSharedJournal.jsx
-        │       ├── SharedEntryCard.jsx
-        │       └── SharedJournalCard.jsx
+        │   └── navbar/
+        │       ├── Navbar.jsx
+        │       ├── NavLinks.jsx
+        │       ├── NavProfile.jsx
+        │       └── SearchBox.jsx
         ├── pages/
         │   ├── About.jsx
         │   ├── Analytics.jsx
         │   ├── Dashboard.jsx
         │   ├── Entries.jsx
         │   ├── Home.jsx
-        │   ├── InviteHandler.jsx
         │   ├── Login.jsx
         │   ├── NotFound.jsx
-        │   ├── SharedJournalDetail.jsx
-        │   ├── SharedJournals.jsx
         │   └── Signup.jsx
         ├── redux/
         │   ├── store.js
         │   ├── api/
         │   │   ├── apiSlice.js
         │   │   ├── entriesApiSlice.js
-        │   │   ├── sharedJournalApiSlice.js
         │   │   └── usersApiSlice.js
         │   └── features/
         │       └── userSlice.js
@@ -321,20 +306,6 @@ Photos are uploaded as base64 data URIs from the browser to the backend, then st
 | GET | `/analytics/weekly` | Get weekly activity |
 | GET | `/analytics/monthly` | Get monthly activity |
 | GET | `/analytics/streak` | Get writing streak |
-
-### Shared Journals — `/api/shared-journals`
-| Method | Endpoint | Description |
-|---|---|---|
-| GET | `/` | Get my shared journals |
-| POST | `/` | Create shared journal |
-| GET | `/:journalId` | Get shared journal details |
-| DELETE | `/:journalId` | Delete shared journal |
-| POST | `/:journalId/entries` | Add entry to shared journal |
-| PATCH | `/entries/:entryId` | Update shared entry |
-| DELETE | `/entries/:entryId` | Delete shared entry |
-| GET | `/invite/:token` | Get invite information |
-| POST | `/invite/:token/accept` | Accept journal invite |
-| POST | `/invite/:token/decline` | Decline journal invite |
 
 ## 🤝 Contributing & Contact
 

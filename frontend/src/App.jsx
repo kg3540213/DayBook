@@ -4,18 +4,15 @@ import { Provider } from "react-redux";
 import store from "./redux/store";
 import { ToastContainer } from "react-toastify";
 
-import Layout              from "./components/Layout";
-import Home                from "./pages/Home";
-import Login               from "./pages/Login";
-import Signup              from "./pages/Signup";
-import Entries             from "./pages/Entries";
-import Dashboard           from "./pages/Dashboard";
-import About               from "./pages/About";
-import NotFound            from "./pages/NotFound";
-import CalendarView        from "./pages/CalendarView";
-import SharedJournals      from "./pages/SharedJournals";
-import SharedJournalDetail from "./pages/SharedJournalDetail";
-import InviteHandler       from "./pages/InviteHandler";
+import Layout       from "./components/Layout";
+import Home         from "./pages/Home";
+import Login        from "./pages/Login";
+import Signup       from "./pages/Signup";
+import Entries      from "./pages/Entries";
+import Dashboard    from "./pages/Dashboard";
+import About        from "./pages/About";
+import NotFound     from "./pages/NotFound";
+import CalendarView from "./pages/CalendarView";
 
 const App = () => {
   return (
@@ -31,22 +28,6 @@ const App = () => {
             <Route path="calendar"  element={<CalendarView />} />
             <Route path="dashboard" element={<Dashboard />} />
             <Route path="about"     element={<About />} />
-
-            {/* ── Shared Journals ─────────────────────────────── */}
-            <Route path="shared-journals" element={<SharedJournals />} />
-
-            {/* IMPORTANT: invite route MUST come before /:journalId
-                otherwise React Router v7 matches "invite" as a journalId */}
-            <Route
-              path="shared-journals/invite/:token"
-              element={<InviteHandler />}
-            />
-
-            <Route
-              path="shared-journals/:journalId"
-              element={<SharedJournalDetail />}
-            />
-
             <Route path="*" element={<NotFound />} />
           </Route>
         </Routes>

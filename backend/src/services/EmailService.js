@@ -60,83 +60,6 @@ const sendOtpEmail = async (toEmail, otp, firstName) => {
   }
 };
 
-// ── Shared Journal invite email ───────────────────────────────────
-const sendSharedJournalInviteEmail = async (
-  toEmail,
-  inviterFirstName,
-  journalName,
-  inviteToken
-) => {
-  const frontendUrl =
-    process.env.FRONTEND_URL || "http://localhost:5173";
-
-  // Both buttons go to the same invite page — the page shows Accept/Decline UI.
-  // Append ?action=accept or ?action=decline so InviteHandler can auto-trigger.
-  const acceptUrl  = `${frontendUrl}/shared-journals/invite/${inviteToken}?action=accept`;
-  const declineUrl = `${frontendUrl}/shared-journals/invite/${inviteToken}?action=decline`;
-
-  // Use EMAIL_USER as FROM (verified sender), SMTP_USER is just for auth
-  const fromEmail = process.env.EMAIL_USER || process.env.SMTP_USER;
-  if (!fromEmail) {
-    throw new Error("EMAIL_USER or SMTP_USER environment variable not configured");
-  }
-
-  const mailOptions = {
-    from: `"DayBook" <${fromEmail}>`,
-    replyTo: fromEmail,
-    to: toEmail,
-    subject: `${inviterFirstName} invited you to a shared journal on DayBook`,
-    text: `You've been invited!\n\n${inviterFirstName} has invited you to join a shared journal called "${journalName}" on DayBook.\n\nAccept: ${acceptUrl}\nDecline: ${declineUrl}\n\nThis invite expires in 7 days.`,
-    html: `
-      <div style="font-family: sans-serif; max-width: 520px; margin: 0 auto; padding: 32px 24px; background: #f9fafb; border-radius: 12px;">
-        <h2 style="margin: 0 0 8px; color: #111;">You've been invited! 📓</h2>
-        <p style="color: #555; margin: 0 0 20px;">
-          <strong>${inviterFirstName}</strong> has invited you to join a shared journal on DayBook:
-        </p>
-
-        <div style="background: #ffffff; border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; text-align: center; margin-bottom: 24px;">
-          <p style="margin: 0 0 6px; font-size: 13px; color: #888; text-transform: uppercase; letter-spacing: 1px;">Journal Name</p>
-          <p style="margin: 0; font-size: 24px; font-weight: 700; color: #6366f1;">${journalName}</p>
-        </div>
-
-        <p style="color: #555; font-size: 14px; margin: 0 0 20px;">
-          In a shared journal, both of you can write entries and read each other's thoughts — a private space just for the two of you.
-        </p>
-
-        <div style="margin-bottom: 24px;">
-          <a href="${acceptUrl}"
-             style="display: inline-block; background: #6366f1; color: #fff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 600; font-size: 15px; margin-right: 12px;">
-            ✅ Accept Invite
-          </a>
-          <a href="${declineUrl}"
-             style="display: inline-block; background: #f3f4f6; color: #374151; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 600; font-size: 15px;">
-            ✕ Decline
-          </a>
-        </div>
-
-        <p style="color: #aaa; font-size: 12px; margin: 0;">
-          This invite expires in <strong>7 days</strong>. You must be logged in to DayBook with <strong>${toEmail}</strong> to accept.<br/>
-          If you don't have a DayBook account, <a href="${frontendUrl}/signup" style="color: #6366f1;">sign up first</a>.
-        </p>
-      </div>
-    `,
-  };
-
-  try {
-    const result = await transporter.sendMail(mailOptions);
-    console.log("Invite email sent successfully to:", toEmail);
-    return result;
-  } catch (error) {
-    console.error("Email sending error details:", {
-      to: toEmail,
-      error: error.message,
-      code: error.code,
-      response: error.response,
-    });
-    throw error;
-  }
-};
-
 // ── Verify email configuration ────────────────────────────────────
 const verifyEmailConfig = async () => {
   try {
@@ -166,4 +89,4 @@ const verifyEmailConfig = async () => {
   }
 };
 
-module.exports = { sendOtpEmail, sendSharedJournalInviteEmail, verifyEmailConfig };
+module.exports = { sendOtpEmail, verifyEmailConfig };
