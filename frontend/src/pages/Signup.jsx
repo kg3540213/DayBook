@@ -94,6 +94,7 @@ const Signup = () => {
 
   const [passwordForEncryption, setPasswordForEncryption] = useState("");
   const [otp, setOtp] = useState("");
+  const [emailError, setEmailError] = useState("");
 
   const [countdown, setCountdown] = useState(0);
   const timerRef = useRef(null);
@@ -121,11 +122,30 @@ const Signup = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    
+    // Validate email format if field being changed is email
+    if (name === "email") {
+      const email = value.trim().toLowerCase();
+      if (email && !email.endsWith("@22lpu.in")) {
+        setEmailError("Only LPU emails (e.g., avik@22lpu.in) are allowed");
+      } else {
+        setEmailError("");
+      }
+    }
   };
 
   // ── Step 1: Signup form submit ─────────────────────────────────
   const handleSignup = async (e) => {
     e.preventDefault();
+    
+    // Validate email before submission
+    const email = formData.email.trim().toLowerCase();
+    if (!email.endsWith("@22lpu.in")) {
+      toast.error("Only LPU emails (e.g., avik@22lpu.in) are allowed");
+      setEmailError("Only LPU emails (e.g., avik@22lpu.in) are allowed");
+      return;
+    }
+    
     try {
       const response = await signup(formData).unwrap();
       dispatch(setPendingEmail(formData.email));
@@ -251,13 +271,16 @@ const Signup = () => {
                         id="email"
                         type="email"
                         name="email"
-                        className="input w-full rounded-lg my-3"
-                        placeholder="you@example.com"
+                        className={`input w-full rounded-lg my-3 ${emailError ? 'input-error' : ''}`}
+                        placeholder="you@22lpu.in"
                         value={formData.email}
                         onChange={handleChange}
                         required
                         autoComplete="on"
                       />
+                      {emailError && (
+                        <p className="text-error text-sm mt-1">{emailError}</p>
+                      )}
                     </div>
 
                     <div>
@@ -279,7 +302,7 @@ const Signup = () => {
                     <button
                       type="submit"
                       className="btn btn-primary w-full rounded-lg my-3"
-                      disabled={signingUp}
+                      disabled={signingUp || emailError}
                     >
                       {signingUp ? "Sending code..." : "Create Account"}
                     </button>
