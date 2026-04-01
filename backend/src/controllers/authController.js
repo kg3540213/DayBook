@@ -22,8 +22,8 @@ const signup = async (req, res) => {
     if (!validator.isEmail(email))
       return res.status(422).json({ message: "Invalid email format!" });
 
-    if (!email.endsWith("@22lpu.in"))
-      return res.status(422).json({ message: "Only LPU emails (e.g., avik@22lpu.in) are allowed for signup!" });
+    if (!email.endsWith("@lpu.in"))
+      return res.status(422).json({ message: "Only LPU emails (e.g., avikgh12@lpu.in) are allowed for signup!" });
 
     if (email.length > 100)
       return res.status(422).json({ message: "Email cannot exceed 100 characters!" });

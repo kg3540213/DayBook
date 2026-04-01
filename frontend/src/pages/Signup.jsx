@@ -126,8 +126,8 @@ const Signup = () => {
     // Validate email format if field being changed is email
     if (name === "email") {
       const email = value.trim().toLowerCase();
-      if (email && !email.endsWith("@22lpu.in")) {
-        setEmailError("Only LPU emails (e.g., avik@22lpu.in) are allowed");
+      if (email && !email.endsWith("@lpu.in")) {
+        setEmailError("Only LPU emails (e.g., avikgh12@lpu.in) are allowed");
       } else {
         setEmailError("");
       }
@@ -140,9 +140,9 @@ const Signup = () => {
     
     // Validate email before submission
     const email = formData.email.trim().toLowerCase();
-    if (!email.endsWith("@22lpu.in")) {
-      toast.error("Only LPU emails (e.g., avik@22lpu.in) are allowed");
-      setEmailError("Only LPU emails (e.g., avik@22lpu.in) are allowed");
+    if (!email.endsWith("@lpu.in")) {
+      toast.error("Only LPU emails (e.g., avikgh12@lpu.in) are allowed");
+      setEmailError("Only LPU emails (e.g., avikgh12@lpu.in) are allowed");
       return;
     }
     
@@ -272,7 +272,7 @@ const Signup = () => {
                         type="email"
                         name="email"
                         className={`input w-full rounded-lg my-3 ${emailError ? 'input-error' : ''}`}
-                        placeholder="you@22lpu.in"
+                        placeholder="avikgh12@lpu.in"
                         value={formData.email}
                         onChange={handleChange}
                         required

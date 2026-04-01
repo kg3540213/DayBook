@@ -5,7 +5,7 @@ import {
   useUploadProfilePhotoMutation,
   useDeleteProfilePhotoMutation,
 } from "../../redux/api/usersApiSlice";
-import { setProfilePhoto } from "../../redux/features/userSlice";
+import { setProfilePhoto, userInfo } from "../../redux/features/userSlice";
 import { toast } from "react-toastify";
 
 // ── Initials avatar fallback ──────────────────────────────────────
@@ -97,7 +97,21 @@ const Profile = ({ close }) => {
 
     try {
       const res = await uploadProfilePhoto({ image: preview }).unwrap();
+      // Update both the photo and the full user object in Redux
       dispatch(setProfilePhoto(res.profilePhoto));
+      // Update the full user object to ensure UI reflects changes everywhere
+      dispatch(
+        userInfo({
+          ...user,
+          data: {
+            ...user?.data,
+            data: {
+              ...user?.data?.data,
+              profilePhoto: res.profilePhoto,
+            },
+          },
+        })
+      );
       setPreview(null);
       toast.success(res.message || "Photo updated!");
     } catch (err) {
@@ -112,7 +126,20 @@ const Profile = ({ close }) => {
   const handleDeletePhoto = async () => {
     try {
       const res = await deleteProfilePhoto().unwrap();
+      // Update both the photo and the full user object in Redux
       dispatch(setProfilePhoto(null));
+      dispatch(
+        userInfo({
+          ...user,
+          data: {
+            ...user?.data,
+            data: {
+              ...user?.data?.data,
+              profilePhoto: null,
+            },
+          },
+        })
+      );
       toast.success(res.message || "Photo removed.");
     } catch (err) {
       toast.error(err?.data?.message || "Could not remove photo.");
@@ -124,6 +151,20 @@ const Profile = ({ close }) => {
     e.preventDefault();
     try {
       const res = await updateProfile({ firstName, lastName }).unwrap();
+      // Update Redux with the new name
+      dispatch(
+        userInfo({
+          ...user,
+          data: {
+            ...user?.data,
+            data: {
+              ...user?.data?.data,
+              firstName,
+              lastName,
+            },
+          },
+        })
+      );
       toast.success(res.message || "Profile saved.");
       close();
     } catch (err) {

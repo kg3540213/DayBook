@@ -275,6 +275,11 @@ const SearchBox = ({ toggle, expanded = false }) => {
     toggle?.();
   };
 
+  // ── Only show search if authenticated ─────────────────────────
+  if (!user) {
+    return null;
+  }
+
   // ── Sidebar expanded mode ─────────────────────────────────────
   if (expanded) {
     return (
