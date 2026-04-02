@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
 import { useSelector } from "react-redux";
-import { FaHome, FaBookOpen, FaChartBar, FaInfo, FaCalendarAlt } from "react-icons/fa";
+import { FaHome, FaBookOpen, FaChartBar, FaInfo, FaCalendarAlt, FaFire } from "react-icons/fa";
 
 const NavLinks = ({ toggle }) => {
   const user = useSelector((state) => state.user.data);
@@ -17,6 +17,12 @@ const NavLinks = ({ toggle }) => {
 
       {isAuthenticated && (
         <>
+          <li onClick={toggle}>
+            <Link to="/feed">
+              <FaFire />
+              Today Feed
+            </Link>
+          </li>
           <li onClick={toggle}>
             <Link to="/entries">
               <FaBookOpen />

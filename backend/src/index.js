@@ -43,10 +43,12 @@ app.use(
 const authRoutes  = require("./routes/authRoutes");
 const userRoutes  = require("./routes/userRoutes");
 const entryRoutes = require("./routes/entryRoutes");
+const postRoutes  = require("./routes/postRoutes");
 
 app.use("/api/auth",    authRoutes);
 app.use("/api/users",   userRoutes);
 app.use("/api/entries", entryRoutes);
+app.use("/api/posts",   postRoutes);
 
 // ── Serve Frontend ────────────────────────────────────────────────
 app.use(express.static(path.join(__dirname, "../../frontend/dist")));

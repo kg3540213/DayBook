@@ -13,6 +13,7 @@ import Dashboard    from "./pages/Dashboard";
 import About        from "./pages/About";
 import NotFound     from "./pages/NotFound";
 import CalendarView from "./pages/CalendarView";
+import TodayFeed    from "./pages/TodayFeed";
 
 const App = () => {
   return (
@@ -27,6 +28,7 @@ const App = () => {
             <Route path="entries"   element={<Entries />} />
             <Route path="calendar"  element={<CalendarView />} />
             <Route path="dashboard" element={<Dashboard />} />
+            <Route path="feed"      element={<TodayFeed />} />
             <Route path="about"     element={<About />} />
             <Route path="*" element={<NotFound />} />
           </Route>
