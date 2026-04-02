@@ -43,15 +43,15 @@ const EntryCard = ({
   highlightText, isPinned: initialPinned, tags = [],
   contentFormat = "plain",
 }) => {
-  const userPassword = useSelector((state) => state.user.userPassword);
+  const dataKey = useSelector((state) => state.user.dataKey);
   // togglePin now takes just the id — uses PATCH /entries/:id/pin
   const [togglePin, { isLoading: pinning }] = useTogglePinMutation();
 
   // ── Decrypt ──────────────────────────────────────────────────────
   let decryptedContent = content;
-  if (userPassword && content) {
+  if (dataKey && content) {
     try {
-      const result = decryptText(content, userPassword);
+      const result = decryptText(content, dataKey);
       decryptedContent = result || content;
     } catch { /* leave raw */ }
   }

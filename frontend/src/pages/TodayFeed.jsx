@@ -9,6 +9,7 @@ import {
 import PostForm from "../components/post/PostForm";
 import PostCard from "../components/post/PostCard";
 import Loader from "../components/Loader";
+import lpuLogo from "../assets/lpu.png";
 
 const TodayFeed = () => {
   const user = useSelector((state) => state.user.data);
@@ -73,7 +74,17 @@ const TodayFeed = () => {
 
         {/* ── Header ──────────────────────────────────────────── */}
         <div className="mb-8">
-          <p className="text-primary text-xs font-bold tracking-widest uppercase mb-2">LPU Community</p>
+          <p className="text-primary text-xs font-bold tracking-widest uppercase mb-4">LPU Community</p>
+          
+          {/* LPU Logo */}
+          <div className="mb-6 flex justify-center">
+            <img 
+              src={lpuLogo} 
+              alt="LPU Logo" 
+              className="h-24 w-auto object-contain rounded-xl shadow-md hover:shadow-lg transition-shadow duration-200"
+            />
+          </div>
+
           <h1 className="text-3xl sm:text-4xl font-black mb-3 tracking-tight">
             🌍 Today&apos;s Feed
           </h1>

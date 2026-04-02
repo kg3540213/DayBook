@@ -94,8 +94,8 @@ const MOOD_OPTIONS = [
 // ── Main SearchBox ────────────────────────────────────────────────
 const SearchBox = ({ toggle, expanded = false }) => {
   const navigate     = useNavigate();
-  const userPassword = useSelector((s) => s.user.userPassword);
-  const user         = useSelector((s) => s.user.data);
+  const dataKey = useSelector((s) => s.user.dataKey);
+  const user    = useSelector((s) => s.user.data);
   const apiKey       = import.meta.env.VITE_GEMINI_API_KEY;
 
   const { data: allEntriesData } = useGetEntriesQuery(undefined, { skip: !user });
@@ -122,7 +122,7 @@ const SearchBox = ({ toggle, expanded = false }) => {
   const [aiError,   setAiError]   = useState("");
   const aiQueryRef     = useRef("");   // always-fresh mirror of aiQuery
   const allEntriesRef  = useRef([]);   // always-fresh mirror of allEntries
-  const userPasswordRef = useRef(null);
+  const dataKeyRef     = useRef(null);
 
   const inputRef   = useRef(null);
   const aiInputRef = useRef(null);
@@ -130,7 +130,7 @@ const SearchBox = ({ toggle, expanded = false }) => {
   // Keep refs in sync
   useEffect(() => { aiQueryRef.current      = aiQuery;      }, [aiQuery]);
   useEffect(() => { allEntriesRef.current   = allEntries;   }, [allEntries]);
-  useEffect(() => { userPasswordRef.current = userPassword; }, [userPassword]);
+  useEffect(() => { dataKeyRef.current     = dataKey;    }, [dataKey]);
 
   // Focus on open
   useEffect(() => {
@@ -189,7 +189,7 @@ const SearchBox = ({ toggle, expanded = false }) => {
   const runAiSearch = async () => {
     const q        = aiQueryRef.current.trim();
     const entries  = allEntriesRef.current;
-    const password = userPasswordRef.current;
+    const dataKey = dataKeyRef.current;
 
     if (!q) {
       setAiError("Please type a search query first.");
@@ -212,9 +212,9 @@ const SearchBox = ({ toggle, expanded = false }) => {
       // Decrypt content in memory — never leaves the browser
       const plain = entries.map((e) => {
         let p = e.content || "";
-        if (password && p) {
+        if (dataKey && p) {
           try {
-            const d = decryptText(p, password);
+            const d = decryptText(p, dataKey);
             if (d) p = d;
           } catch (decryptErr) {
             console.warn("[runAiSearch] Decrypt failed for entry", e._id, decryptErr);

@@ -15,9 +15,10 @@ import {
 } from "../redux/api/usersApiSlice";
 import {
   userInfo,
-  setUserPassword,
+  setUserDataKey,
   setPendingEmail,
 } from "../redux/features/userSlice";
+import { decryptDataKey } from "../utils/crypto";
 import { savePasswordToSession } from "../utils/sessionPassword";
 
 // ── OTP input — 6 individual digit boxes ─────────────────────────
@@ -170,7 +171,22 @@ const Signup = () => {
       const response = await verifyOtp({ email, otp }).unwrap();
 
       dispatch(userInfo(response));
-      dispatch(setUserPassword(passwordForEncryption));
+
+      const encryptedDataKey = response.data.encryptedDataKey;
+      if (!encryptedDataKey) {
+        toast.error("Missing encrypted data key from server. Cannot decrypt entries.");
+        return;
+      }
+
+      let dataKey;
+      try {
+        dataKey = decryptDataKey(encryptedDataKey, passwordForEncryption);
+      } catch (err) {
+        toast.error("Unable to decrypt your data key after signup. Please try again.");
+        return;
+      }
+
+      dispatch(setUserDataKey(dataKey));
       savePasswordToSession(passwordForEncryption);
       dispatch(setPendingEmail(null));
 

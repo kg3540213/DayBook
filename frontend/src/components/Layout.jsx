@@ -4,12 +4,13 @@ import Footer from "./Footer";
 import { useEffect, useState } from "react";
 import { useProfileQuery } from "../redux/api/usersApiSlice";
 import { useDispatch } from "react-redux";
-import { removeUserInfo, userInfo, setUserPassword } from "../redux/features/userSlice";
+import { removeUserInfo, userInfo, setUserDataKey } from "../redux/features/userSlice";
+import { getPasswordFromSession } from "../utils/sessionPassword";
+import { decryptDataKey } from "../utils/crypto";
 import Loader from "./Loader";
 import NavLinks from "./navbar/NavLinks";
 import SearchBox from "./navbar/SearchBox";
 import logo from "../assets/logo.svg";
-import { getPasswordFromSession } from "../utils/sessionPassword";
 
 const Layout = () => {
   const { data: profile, isError, isLoading } = useProfileQuery();
@@ -21,14 +22,19 @@ const Layout = () => {
   useEffect(() => {
     if (!isLoading) {
       if (profile) {
-        // profile = { message, data: { email, firstName, lastName, profilePhoto } }
+        // profile = { message, data: { email, firstName, lastName, profilePhoto, encryptedDataKey } }
         // Store directly — state.user.data.data = { email, firstName, ... }
         dispatch(userInfo(profile));
 
-        // Restore encryption password after page refresh
+        // Restore the key for decryption if password is still in session.
         const savedPassword = getPasswordFromSession();
-        if (savedPassword) {
-          dispatch(setUserPassword(savedPassword));
+        if (savedPassword && profile?.data?.encryptedDataKey) {
+          try {
+            const dataKey = decryptDataKey(profile.data.encryptedDataKey, savedPassword);
+            dispatch(setUserDataKey(dataKey));
+          } catch {
+            // If password in session is stale or wrong, don't block UI.
+          }
         }
       } else if (isError) {
         dispatch(removeUserInfo());

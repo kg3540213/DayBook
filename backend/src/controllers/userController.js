@@ -3,10 +3,10 @@ const cloudinary = require("../config/cloudinary");
 
 // ── VIEW PROFILE ──────────────────────────────────────────────────
 const viewProfile = (req, res) => {
-  const { email, firstName, lastName, profilePhoto } = req.user;
+  const { email, firstName, lastName, profilePhoto, encryptedDataKey } = req.user;
   res.status(200).json({
     message: "Profile fetched successfully!",
-    data: { email, firstName, lastName, profilePhoto },
+    data: { email, firstName, lastName, profilePhoto, encryptedDataKey },
   });
 };
 

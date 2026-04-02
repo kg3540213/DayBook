@@ -2,7 +2,8 @@ import { useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { useLoginMutation } from "../redux/api/usersApiSlice";
 import { useDispatch, useSelector } from "react-redux";
-import { userInfo, setUserPassword } from "../redux/features/userSlice";
+import { userInfo, setUserDataKey } from "../redux/features/userSlice";
+import { decryptDataKey } from "../utils/crypto";
 import { savePasswordToSession } from "../utils/sessionPassword";
 import { toast } from "react-toastify";
 
@@ -25,8 +26,22 @@ const Login = () => {
     try {
       const response = await login({ email, password }).unwrap();
 
+      const encryptedDataKey = response.data.encryptedDataKey;
+      if (!encryptedDataKey) {
+        toast.error("Missing encrypted data key from server. Cannot decrypt entries.");
+        return;
+      }
+
+      let dataKey;
+      try {
+        dataKey = decryptDataKey(encryptedDataKey, password);
+      } catch (e) {
+        toast.error("Incorrect password. Could not decrypt your data key.");
+        return;
+      }
+
       dispatch(userInfo(response));
-      dispatch(setUserPassword(password));
+      dispatch(setUserDataKey(dataKey));
       savePasswordToSession(password);
 
       navigate(redirectTo, { replace: true });

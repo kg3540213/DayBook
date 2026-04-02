@@ -28,7 +28,7 @@ function AddEntry() {
   const [open, setOpen]                               = useState(false);
   const [addEntry,    { isLoading }]                  = useAddEntryMutation();
   const [analyzeMood, { isLoading: isAnalyzing }]     = useAnalyzeMoodMutation();
-  const userPassword                                  = useSelector((s) => s.user.userPassword);
+  const dataKey                                      = useSelector((s) => s.user.dataKey);
 
   // ── Derive tag suggestions from already-cached entries (no extra endpoint) ──
   const { data: allEntriesData } = useGetEntriesQuery();
@@ -132,14 +132,14 @@ function AddEntry() {
   // ── Submit ────────────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!userPassword) {
+    if (!dataKey) {
       toast.error("Session expired. Please log out and log in again to save entries.");
       return;
     }
     const plainText = formData.content.replace(/<[^>]+>/g, " ").trim();
     if (!plainText) { toast.warning("Entry content cannot be empty."); return; }
     try {
-      const encryptedContent = encryptText(formData.content, userPassword);
+      const encryptedContent = encryptText(formData.content, dataKey);
       const response = await addEntry({
         ...formData,
         content:       encryptedContent,

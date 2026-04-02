@@ -14,7 +14,7 @@ const Logout = ({ close }) => {
     try {
       const response = await logout().unwrap();
 
-      // Clear Redux state
+      // Clear Redux state (including dataKey)
       dispatch(removeUserInfo());
 
       // Clear persisted password from sessionStorage

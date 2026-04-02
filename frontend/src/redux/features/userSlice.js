@@ -2,7 +2,7 @@ import { createSlice } from "@reduxjs/toolkit";
 
 const initialState = {
   data: null,           // full user object after verified login/signup
-  userPassword: null,   // plaintext password kept for entry encryption
+  dataKey: null,        // raw dataKey (base64) in-memory for encrypt/decrypt
   pendingEmail: null,   // email held between signup → OTP verification step
 };
 
@@ -13,15 +13,15 @@ const userSlice = createSlice({
     userInfo: (state, action) => {
       state.data = action.payload;
     },
-    setUserPassword: (state, action) => {
-      state.userPassword = action.payload;
+    setUserDataKey: (state, action) => {
+      state.dataKey = action.payload;
     },
     setPendingEmail: (state, action) => {
       state.pendingEmail = action.payload;
     },
     removeUserInfo: (state) => {
-      state.data         = null;
-      state.userPassword = null;
+      state.data    = null;
+      state.dataKey = null;
       state.pendingEmail = null;
     },
     // Safely update profile photo regardless of nested state shape
@@ -47,7 +47,7 @@ const userSlice = createSlice({
 
 export const {
   userInfo,
-  setUserPassword,
+  setUserDataKey,
   setPendingEmail,
   removeUserInfo,
   setProfilePhoto,

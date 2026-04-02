@@ -47,7 +47,13 @@ const userSchema = new mongoose.Schema({
     type:    Date,
     default: null,
   },
-});
+  // Encrypted user data key for client-side entry encryption.
+  // The user’s password is required to decrypt this value into the raw dataKey.
+  encryptedDataKey: {
+      type: String,
+      required: false,
+      default: null,
+  },});
 
 const User = mongoose.model("User", userSchema);
 

@@ -114,8 +114,8 @@ const cacheSet = (key, value) => {
 // Parameters:
 //   query      — user's natural language search string
 //   entries    — raw entry objects from Redux (content is still ciphertext)
-//   decryptFn  — (ciphertext, password) => plaintext string
-//   password   — from Redux state.user.userPassword
+//   decryptFn  — (ciphertext, dataKey) => plaintext string
+//   dataKey    — from Redux state.user.dataKey
 //   apiKey     — import.meta.env.VITE_GEMINI_API_KEY
 //
 // Returns: entries array sorted by semantic relevance (score attached as _score)
@@ -123,12 +123,12 @@ export const semanticSearch = async ({
   query,
   entries,
   decryptFn,
-  password,
+  dataKey,
   apiKey,
 }) => {
   if (!query.trim()) return entries;
   if (!apiKey) throw new Error("VITE_GEMINI_API_KEY is not set in your .env file.");
-  if (!password) throw new Error("Encryption password unavailable. Please log out and log in again.");
+  if (!dataKey) throw new Error("Encryption key unavailable. Please log out and log in again.");
 
   // Build plain-text index (decrypt in memory — never sent to backend)
   const plain = entries.map((entry) => {

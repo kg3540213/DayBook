@@ -25,7 +25,7 @@ const EditEntry = ({ id }) => {
   const { data: getEntry, isLoading: entryLoading } = useGetEntryQuery(id, { skip: !open });
   const [updateEntry, { isLoading: entryUpdating }] = useUpdateEntryMutation();
   const { data: allEntriesData }                    = useGetEntriesQuery();
-  const userPassword = useSelector((s) => s.user.userPassword);
+  const dataKey = useSelector((s) => s.user.dataKey);
 
   const isLoading = entryLoading || entryUpdating;
 
@@ -50,9 +50,9 @@ const EditEntry = ({ id }) => {
     const entry = getEntry.data;
     let decryptedContent = entry?.content || "";
 
-    if (userPassword && decryptedContent) {
+    if (dataKey && decryptedContent) {
       try {
-        const result = decryptText(decryptedContent, userPassword);
+        const result = decryptText(decryptedContent, dataKey);
         decryptedContent = result || decryptedContent;
       } catch {
         // leave raw — old unencrypted entry
@@ -71,14 +71,14 @@ const EditEntry = ({ id }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!userPassword) {
+    if (!dataKey) {
       toast.error("Session expired. Please log out and log in again to edit entries.");
       return;
     }
     const plainText = formData.content.replace(/<[^>]+>/g, " ").trim();
     if (!plainText) { toast.warning("Entry content cannot be empty."); return; }
     try {
-      const encryptedContent = encryptText(formData.content, userPassword);
+      const encryptedContent = encryptText(formData.content, dataKey);
       const response = await updateEntry({
         id,
         data: {

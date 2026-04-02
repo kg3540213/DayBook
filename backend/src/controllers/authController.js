@@ -8,6 +8,35 @@ const crypto = require("crypto");
 const generateOtp = () =>
   crypto.randomInt(100000, 999999).toString();
 
+// ------------------------------------------------------------------
+// Data key encryption helpers (password ↔ encryptedDataKey)
+// ------------------------------------------------------------------
+const deriveKey = (password, salt) =>
+  crypto.pbkdf2Sync(password, salt, 100000, 32, "sha256");
+
+const encryptDataKey = (dataKey, password) => {
+  const salt = crypto.randomBytes(16);
+  const iv = crypto.randomBytes(16);
+  const key = deriveKey(password, salt);
+  const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
+  let encrypted = cipher.update(dataKey, "utf8", "base64");
+  encrypted += cipher.final("base64");
+  return `${salt.toString("base64")}:${iv.toString("base64")}:${encrypted}`;
+};
+
+const decryptDataKey = (encryptedDataKey, password) => {
+  const parts = encryptedDataKey.split(":");
+  if (parts.length !== 3) throw new Error("Invalid encryptedDataKey format");
+  const [saltB64, ivB64, ciphertext] = parts;
+  const salt = Buffer.from(saltB64, "base64");
+  const iv = Buffer.from(ivB64, "base64");
+  const key = deriveKey(password, salt);
+  const decipher = crypto.createDecipheriv("aes-256-cbc", key, iv);
+  let decrypted = decipher.update(ciphertext, "base64", "utf8");
+  decrypted += decipher.final("utf8");
+  return decrypted;
+};
+
 // ── SIGNUP ────────────────────────────────────────────────────────
 const signup = async (req, res) => {
   try {
@@ -57,6 +86,12 @@ const signup = async (req, res) => {
       existingUser.otpHash   = otpHash;
       existingUser.otpExpiry = new Date(now.getTime() + 10 * 60 * 1000);
       existingUser.otpSentAt = now;
+      
+      // For unverified existing users (or re-signup), create a new data key.
+      // This path typically has no encrypted entries in DB yet.
+      const dataKey = crypto.randomBytes(32).toString("base64");
+      existingUser.encryptedDataKey = encryptDataKey(dataKey, password);
+
       await existingUser.save();
 
       try {
@@ -77,13 +112,20 @@ const signup = async (req, res) => {
     const otpHash = await bcrypt.hash(otp, 10);
     const now = new Date();
 
+    // Generate per-user data key, encrypted under the user's password.
+    const dataKey = crypto.randomBytes(32).toString("base64");
+    const encryptedDataKey = encryptDataKey(dataKey, password);
+
     await User.create({
-      email, firstName, lastName,
+      email,
+      firstName,
+      lastName,
       password: hashedPassword,
       isVerified: false,
       otpHash,
       otpExpiry: new Date(now.getTime() + 10 * 60 * 1000),
       otpSentAt: now,
+      encryptedDataKey,
     });
 
     try {
@@ -142,10 +184,11 @@ const verifyOtp = async (req, res) => {
     res.status(200).json({
       message: "Email verified successfully! Welcome to DayBook.",
       data: {
-        _id:       user._id,
-        email:     user.email,
-        firstName: user.firstName,
-        lastName:  user.lastName,
+        _id:              user._id,
+        email:            user.email,
+        firstName:        user.firstName,
+        lastName:         user.lastName,
+        encryptedDataKey: user.encryptedDataKey,
       },
     });
   } catch (error) {
@@ -236,10 +279,11 @@ const login = async (req, res) => {
     res.json({
       message: "User logged in successfully!",
       data: {
-        _id:       user._id,
-        firstName: user.firstName,
-        lastName:  user.lastName,
-        email:     user.email,
+        _id:              user._id,
+        firstName:        user.firstName,
+        lastName:         user.lastName,
+        email:            user.email,
+        encryptedDataKey: user.encryptedDataKey,
       },
     });
   } catch (error) {
@@ -277,6 +321,15 @@ const changePassword = async (req, res) => {
       })
     )
       return res.status(422).json({ message: "Please enter a strong password!" });
+
+    // Re-wrap encryptedDataKey using the new password.
+    try {
+      const currentDataKey = decryptDataKey(loggedUser.encryptedDataKey, oldPassword);
+      loggedUser.encryptedDataKey = encryptDataKey(currentDataKey, newPassword);
+    } catch (decryptionError) {
+      console.error("Failed to re-wrap data key:", decryptionError);
+      return res.status(500).json({ message: "Could not update encryption key. Please try again later." });
+    }
 
     loggedUser.password = await bcrypt.hash(newPassword, 10);
     await loggedUser.save();

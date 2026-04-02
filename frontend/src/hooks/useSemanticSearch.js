@@ -27,7 +27,7 @@ const useDebounce = (fn, delay) => {
 //
 //   clear() → resets back to original allEntries order
 export const useSemanticSearch = (allEntries = []) => {
-  const userPassword = useSelector((s) => s.user.userPassword);
+  const dataKey = useSelector((s) => s.user.dataKey);
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
   const [results,    setResults]    = useState(null);   // null = not searched yet
@@ -49,7 +49,7 @@ export const useSemanticSearch = (allEntries = []) => {
           query: trimmed,
           entries: allEntries,
           decryptFn: decryptText,
-          password: userPassword,
+          dataKey,
           apiKey,
         });
         setResults(sorted);
@@ -62,7 +62,7 @@ export const useSemanticSearch = (allEntries = []) => {
         setIsSearching(false);
       }
     },
-    [allEntries, userPassword, apiKey, lastQuery, results]
+    [allEntries, dataKey, apiKey, lastQuery, results]
   );
 
   // Debounced version — safe to call on every keystroke

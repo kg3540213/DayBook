@@ -65,11 +65,11 @@ const Pagination = ({ page, totalPages, totalEntries, onPageChange }) => {
 };
 
 // ── Helper: try to decrypt, fall back to raw ciphertext ──────────
-const safeDecrypt = (content, password) => {
+const safeDecrypt = (content, dataKey) => {
   if (!content) return "";
-  if (!password) return content; // no password = return raw (may be unencrypted legacy entry)
+  if (!dataKey) return content; // no dataKey = return raw (may be unencrypted legacy entry)
   try {
-    const result = decryptText(content, password);
+    const result = decryptText(content, dataKey);
     return result || content;
   } catch {
     return content; // decryption failed — treat as plain text (legacy entry)
@@ -82,8 +82,8 @@ const stripHtml = (html) =>
 
 // ── Main ──────────────────────────────────────────────────────────
 const Entries = () => {
-  const user         = useSelector((s) => s.user.data);
-  const userPassword = useSelector((s) => s.user.userPassword);
+  const user    = useSelector((s) => s.user.data);
+  const dataKey = useSelector((s) => s.user.dataKey);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -162,7 +162,7 @@ const Entries = () => {
         if (entry.title.toLowerCase().includes(needle)) return true;
 
         // Check decrypted content
-        const plainContent = stripHtml(safeDecrypt(entry.content, userPassword));
+        const plainContent = stripHtml(safeDecrypt(entry.content, dataKey));
         return plainContent.toLowerCase().includes(needle);
       });
     }
@@ -173,7 +173,7 @@ const Entries = () => {
       if (!a.isPinned && b.isPinned) return 1;
       return new Date(b.date) - new Date(a.date);
     });
-  }, [isLoading, allEntries, mood, pinned, tag, dateFrom, dateTo, searchText, userPassword]);
+  }, [isLoading, allEntries, mood, pinned, tag, dateFrom, dateTo, searchText, dataKey]);
 
   const totalEntries = allFilteredEntries.length;
   const totalPages   = Math.max(1, Math.ceil(totalEntries / ENTRIES_PER_PAGE));
