@@ -22,10 +22,12 @@ const MOODS = [
 const EditEntry = ({ id }) => {
   const [open, setOpen] = useState(false);
 
+  // BUG FIX: was referencing undefined `userPassword` — use dataKey from Redux
+  const dataKey = useSelector((s) => s.user.dataKey);
+
   const { data: getEntry, isLoading: entryLoading } = useGetEntryQuery(id, { skip: !open });
   const [updateEntry, { isLoading: entryUpdating }] = useUpdateEntryMutation();
-  const { data: allEntriesData }                    = useGetEntriesQuery();
-  const dataKey = useSelector((s) => s.user.dataKey);
+  const { data: allEntriesData } = useGetEntriesQuery();
 
   const isLoading = entryLoading || entryUpdating;
 
@@ -50,12 +52,14 @@ const EditEntry = ({ id }) => {
     const entry = getEntry.data;
     let decryptedContent = entry?.content || "";
 
+    // BUG FIX: was `userPassword` — now correctly uses `dataKey`
     if (dataKey && decryptedContent) {
       try {
         const result = decryptText(decryptedContent, dataKey);
+        // Only use result if it's non-empty; fall back to raw for legacy plain entries
         decryptedContent = result || decryptedContent;
       } catch {
-        // leave raw — old unencrypted entry
+        // Leave raw — old unencrypted entry or decryption mismatch
       }
     }
 
@@ -67,7 +71,14 @@ const EditEntry = ({ id }) => {
       tags:     entry?.tags     || [],
       isPinned: entry?.isPinned || false,
     });
-  }, [getEntry, userPassword]);
+  }, [getEntry, dataKey]);
+
+  // Reset form on close
+  useEffect(() => {
+    if (!open) {
+      setFormData({ title: "", mood: "", content: "", date: "", tags: [], isPinned: false });
+    }
+  }, [open]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -102,8 +113,7 @@ const EditEntry = ({ id }) => {
 
       <ModalLayout isOpen={open} close={() => setOpen(false)} wide>
         <div className="card-body">
-
-          {/* ── Header with inline pin toggle ───────────────────── */}
+          {/* Header with inline pin toggle */}
           <div className="flex items-center justify-between mb-1">
             <h2 className="card-title text-lg">Edit Entry</h2>
             <button
@@ -166,4 +176,5 @@ const EditEntry = ({ id }) => {
     </>
   );
 };
+
 export default EditEntry;

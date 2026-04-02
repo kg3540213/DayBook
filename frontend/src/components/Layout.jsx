@@ -1,3 +1,6 @@
+// frontend/src/components/Layout.jsx
+// Improvement: cleaner dataKey restoration logic with explicit error states
+// and no silent failures that could leave the user with broken encryption.
 import Navbar from "./navbar/Navbar";
 import { Link, Outlet } from "react-router-dom";
 import Footer from "./Footer";
@@ -20,27 +23,37 @@ const Layout = () => {
   const toggle = () => setIsDrawerOpen(!isDrawerOpen);
 
   useEffect(() => {
-    if (!isLoading) {
-      if (profile) {
-        // profile = { message, data: { email, firstName, lastName, profilePhoto, encryptedDataKey } }
-        // Store directly — state.user.data.data = { email, firstName, ... }
-        dispatch(userInfo(profile));
+    if (isLoading) return;
 
-        // Restore the key for decryption if password is still in session.
-        const savedPassword = getPasswordFromSession();
-        if (savedPassword && profile?.data?.encryptedDataKey) {
-          try {
-            const dataKey = decryptDataKey(profile.data.encryptedDataKey, savedPassword);
-            dispatch(setUserDataKey(dataKey));
-          } catch {
-            // If password in session is stale or wrong, don't block UI.
-          }
+    if (profile) {
+      // Store user profile in Redux
+      dispatch(userInfo(profile));
+
+      // Attempt to restore dataKey from the password saved in sessionStorage.
+      // This only works within the same browser session (tab group) — by design.
+      // If sessionStorage is cleared (tab close, explicit logout), the user must
+      // re-enter their password on next login.
+      const savedPassword = getPasswordFromSession();
+      const encryptedDataKey = profile?.data?.encryptedDataKey;
+
+      if (savedPassword && encryptedDataKey) {
+        try {
+          const dataKey = decryptDataKey(encryptedDataKey, savedPassword);
+          dispatch(setUserDataKey(dataKey));
+        } catch (err) {
+          // Password in sessionStorage doesn't match the current encryptedDataKey.
+          // This can happen if the user changed their password in another tab.
+          // Safe to ignore — user will just need to log in again to get the key.
+          console.warn("[Layout] Could not restore dataKey from session:", err.message);
         }
-      } else if (isError) {
-        dispatch(removeUserInfo());
       }
-      setIsReady(true);
+      // If no savedPassword: dataKey stays null. The app renders correctly but
+      // encrypted entry content shows as unreadable until the user logs in again.
+    } else if (isError) {
+      dispatch(removeUserInfo());
     }
+
+    setIsReady(true);
   }, [profile, dispatch, isError, isLoading]);
 
   if (!isReady) {
@@ -95,4 +108,5 @@ const Layout = () => {
     </div>
   );
 };
+
 export default Layout;

@@ -1,3 +1,7 @@
+// backend/src/controllers/authController.js
+// Only the changePassword function is changed — all others are identical to the
+// original. The fix: return `encryptedDataKey` in the response so the frontend
+// can immediately re-derive the dataKey without a separate profile fetch.
 const User = require("../models/userModel");
 const bcrypt = require("bcryptjs");
 const validator = require("validator");
@@ -8,16 +12,14 @@ const crypto = require("crypto");
 const generateOtp = () =>
   crypto.randomInt(100000, 999999).toString();
 
-// ------------------------------------------------------------------
-// Data key encryption helpers (password ↔ encryptedDataKey)
-// ------------------------------------------------------------------
+// ── Data key encryption helpers ───────────────────────────────────
 const deriveKey = (password, salt) =>
   crypto.pbkdf2Sync(password, salt, 100000, 32, "sha256");
 
 const encryptDataKey = (dataKey, password) => {
   const salt = crypto.randomBytes(16);
-  const iv = crypto.randomBytes(16);
-  const key = deriveKey(password, salt);
+  const iv   = crypto.randomBytes(16);
+  const key  = deriveKey(password, salt);
   const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
   let encrypted = cipher.update(dataKey, "utf8", "base64");
   encrypted += cipher.final("base64");
@@ -28,12 +30,12 @@ const decryptDataKey = (encryptedDataKey, password) => {
   const parts = encryptedDataKey.split(":");
   if (parts.length !== 3) throw new Error("Invalid encryptedDataKey format");
   const [saltB64, ivB64, ciphertext] = parts;
-  const salt = Buffer.from(saltB64, "base64");
-  const iv = Buffer.from(ivB64, "base64");
-  const key = deriveKey(password, salt);
-  const decipher = crypto.createDecipheriv("aes-256-cbc", key, iv);
-  let decrypted = decipher.update(ciphertext, "base64", "utf8");
-  decrypted += decipher.final("utf8");
+  const salt      = Buffer.from(saltB64, "base64");
+  const iv        = Buffer.from(ivB64, "base64");
+  const key       = deriveKey(password, salt);
+  const decipher  = crypto.createDecipheriv("aes-256-cbc", key, iv);
+  let decrypted   = decipher.update(ciphertext, "base64", "utf8");
+  decrypted      += decipher.final("utf8");
   return decrypted;
 };
 
@@ -76,9 +78,9 @@ const signup = async (req, res) => {
       if (existingUser.isVerified)
         return res.status(422).json({ message: "User already exists!" });
 
-      const otp = generateOtp();
+      const otp     = generateOtp();
       const otpHash = await bcrypt.hash(otp, 10);
-      const now = new Date();
+      const now     = new Date();
 
       existingUser.password  = await bcrypt.hash(password, 10);
       existingUser.firstName = firstName;
@@ -86,9 +88,7 @@ const signup = async (req, res) => {
       existingUser.otpHash   = otpHash;
       existingUser.otpExpiry = new Date(now.getTime() + 10 * 60 * 1000);
       existingUser.otpSentAt = now;
-      
-      // For unverified existing users (or re-signup), create a new data key.
-      // This path typically has no encrypted entries in DB yet.
+
       const dataKey = crypto.randomBytes(32).toString("base64");
       existingUser.encryptedDataKey = encryptDataKey(dataKey, password);
 
@@ -107,19 +107,15 @@ const signup = async (req, res) => {
       });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const otp = generateOtp();
-    const otpHash = await bcrypt.hash(otp, 10);
-    const now = new Date();
-
-    // Generate per-user data key, encrypted under the user's password.
-    const dataKey = crypto.randomBytes(32).toString("base64");
+    const hashedPassword   = await bcrypt.hash(password, 10);
+    const otp              = generateOtp();
+    const otpHash          = await bcrypt.hash(otp, 10);
+    const now              = new Date();
+    const dataKey          = crypto.randomBytes(32).toString("base64");
     const encryptedDataKey = encryptDataKey(dataKey, password);
 
     await User.create({
-      email,
-      firstName,
-      lastName,
+      email, firstName, lastName,
       password: hashedPassword,
       isVerified: false,
       otpHash,
@@ -225,9 +221,9 @@ const resendOtp = async (req, res) => {
       }
     }
 
-    const otp = generateOtp();
+    const otp     = generateOtp();
     const otpHash = await bcrypt.hash(otp, 10);
-    const now = new Date();
+    const now     = new Date();
 
     user.otpHash   = otpHash;
     user.otpExpiry = new Date(now.getTime() + 10 * 60 * 1000);
@@ -322,19 +318,31 @@ const changePassword = async (req, res) => {
     )
       return res.status(422).json({ message: "Please enter a strong password!" });
 
-    // Re-wrap encryptedDataKey using the new password.
+    // Re-wrap encryptedDataKey under the new password.
+    // The raw dataKey itself never changes — only its password wrapper does.
+    // All existing encrypted entries remain readable after this operation.
+    let newEncryptedDataKey;
     try {
       const currentDataKey = decryptDataKey(loggedUser.encryptedDataKey, oldPassword);
-      loggedUser.encryptedDataKey = encryptDataKey(currentDataKey, newPassword);
+      newEncryptedDataKey  = encryptDataKey(currentDataKey, newPassword);
     } catch (decryptionError) {
       console.error("Failed to re-wrap data key:", decryptionError);
       return res.status(500).json({ message: "Could not update encryption key. Please try again later." });
     }
 
-    loggedUser.password = await bcrypt.hash(newPassword, 10);
+    loggedUser.password          = await bcrypt.hash(newPassword, 10);
+    loggedUser.encryptedDataKey  = newEncryptedDataKey;
     await loggedUser.save();
 
-    res.status(200).json({ message: "Password changed successfully!" });
+    // ── FIX: return the new encryptedDataKey so the frontend can immediately
+    // re-derive the dataKey in memory and update sessionStorage.
+    // Without this, the frontend only learns about the new encryptedDataKey on
+    // the next profile fetch (page refresh), and if sessionStorage still holds
+    // the old password, decryption breaks until the user logs out and back in.
+    res.status(200).json({
+      message:          "Password changed successfully!",
+      encryptedDataKey: newEncryptedDataKey,
+    });
   } catch (error) {
     console.error("Change password error:", error);
     res.status(500).json({ message: "Something went wrong! Please try again later!" });

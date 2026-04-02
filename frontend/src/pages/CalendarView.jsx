@@ -1,3 +1,8 @@
+// frontend/src/pages/CalendarView.jsx
+// Improvement: derives calendar data entirely from the already-cached getEntries
+// result (limit=1000). No separate /calendar endpoint call needed for navigation —
+// already have all entries in memory. The server-side calendar endpoint is
+// still available via useGetCalendarDataQuery for future use.
 import { useState, useMemo } from "react";
 import { useSelector } from "react-redux";
 import { Navigate, useNavigate } from "react-router-dom";
@@ -6,14 +11,12 @@ import Loader from "../components/Loader";
 import ModalLayout from "../components/ModalLayout";
 import { FaChevronLeft, FaChevronRight, FaThumbtack } from "react-icons/fa";
 
-// ── Constants ─────────────────────────────────────────────────────
 const DAY_NAMES   = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
 ];
 
-// Mood → dot colour (Tailwind safe-listed bg classes)
 const MOOD_DOT = {
   "🙂": "bg-emerald-500",
   "😔": "bg-blue-500",
@@ -82,7 +85,6 @@ const CalendarGrid = ({ year, month, calendarData, onDayClick }) => {
 
   return (
     <div className="w-full">
-      {/* Day-of-week headers */}
       <div className="grid grid-cols-7 mb-1">
         {DAY_NAMES.map((d) => (
           <div key={d} className="text-center text-xs font-semibold text-base-content/40 py-1 select-none">
@@ -91,15 +93,14 @@ const CalendarGrid = ({ year, month, calendarData, onDayClick }) => {
         ))}
       </div>
 
-      {/* Day cells */}
       <div className="grid grid-cols-7 gap-1">
         {cells.map((day, i) => {
           if (!day) return <div key={`blank-${i}`} />;
 
-          const dateStr  = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-          const entries  = calendarData[dateStr] ?? [];
-          const isToday  = dateStr === today;
-          const moodSet  = [...new Set(entries.map((e) => e.mood))].slice(0, 3);
+          const dateStr   = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          const entries   = calendarData[dateStr] ?? [];
+          const isToday   = dateStr === today;
+          const moodSet   = [...new Set(entries.map((e) => e.mood))].slice(0, 3);
           const hasPinned = entries.some((e) => e.isPinned);
 
           return (
@@ -109,8 +110,7 @@ const CalendarGrid = ({ year, month, calendarData, onDayClick }) => {
               onClick={() => onDayClick(dateStr, entries)}
               className={`
                 relative flex flex-col items-center justify-start
-                min-h-[54px] p-1.5 rounded-xl text-sm transition-all select-none
-                border
+                min-h-[54px] p-1.5 rounded-xl text-sm transition-all select-none border
                 ${isToday
                   ? "border-primary bg-primary/10 font-bold"
                   : entries.length > 0
@@ -122,27 +122,18 @@ const CalendarGrid = ({ year, month, calendarData, onDayClick }) => {
               <span className={isToday ? "text-primary" : "text-base-content/70"}>
                 {day}
               </span>
-
-              {/* Mood dots */}
               {moodSet.length > 0 && (
                 <div className="flex gap-0.5 mt-1 justify-center flex-wrap">
                   {moodSet.map((mood) => (
-                    <span
-                      key={mood}
-                      className={`w-1.5 h-1.5 rounded-full ${MOOD_DOT[mood] ?? "bg-base-content/30"}`}
-                    />
+                    <span key={mood} className={`w-1.5 h-1.5 rounded-full ${MOOD_DOT[mood] ?? "bg-base-content/30"}`} />
                   ))}
                 </div>
               )}
-
-              {/* Entry count */}
               {entries.length > 0 && (
                 <span className="text-[9px] text-base-content/40 mt-0.5 leading-tight">
                   {entries.length} {entries.length === 1 ? "entry" : "entries"}
                 </span>
               )}
-
-              {/* Pin indicator */}
               {hasPinned && (
                 <FaThumbtack className="absolute top-1 right-1 text-[8px] text-warning opacity-80" />
               )}
@@ -169,19 +160,21 @@ const CalendarView = () => {
   const [selectedEntries, setSelectedEntries] = useState([]);
   const [modalOpen,       setModalOpen]       = useState(false);
 
-  // ── Load all entries from cache / server ─────────────────────────
+  // IMPROVEMENT: reuse the already-cached getEntries (limit=1000) instead of
+  // hitting the /calendar endpoint on every month navigation. Calendar grouping
+  // is done client-side from the same data Entries.jsx uses — zero extra requests.
   const { data: allEntriesData, isLoading, isError } = useGetEntriesQuery();
   const allEntries = allEntriesData?.data ?? [];
 
-  // ── Group entries for current month in-memory ────────────────────
+  // Group entries for the current viewed month — derived in memory
   const calendarData = useMemo(() => {
     const grouped = {};
     allEntries.forEach((entry) => {
-      const d       = new Date(entry.date);
-      const entryY  = d.getFullYear();
-      const entryM  = d.getMonth();
+      const d      = new Date(entry.date);
+      const entryY = d.getFullYear();
+      const entryM = d.getMonth();
       if (entryY !== viewYear || entryM !== viewMonth) return;
-      const key     = d.toISOString().slice(0, 10);
+      const key = d.toISOString().slice(0, 10);
       if (!grouped[key]) grouped[key] = [];
       grouped[key].push({
         _id:      entry._id,
@@ -194,7 +187,6 @@ const CalendarView = () => {
     return grouped;
   }, [allEntries, viewYear, viewMonth]);
 
-  // ── Navigation ────────────────────────────────────────────────────
   const prevMonth = () => {
     if (viewMonth === 0) { setViewYear((y) => y - 1); setViewMonth(11); }
     else setViewMonth((m) => m - 1);
@@ -215,24 +207,21 @@ const CalendarView = () => {
     navigate(`/entries?search=${encodeURIComponent(title)}`);
   };
 
-  // ── Stats for this month ──────────────────────────────────────────
-  const totalEntries  = Object.values(calendarData).reduce((s, a) => s + a.length, 0);
-  const activeDays    = Object.keys(calendarData).length;
-  const moodCounts    = { "🙂": 0, "😔": 0, "😡": 0, "😐": 0 };
+  // Monthly stats derived from calendarData
+  const totalEntries = Object.values(calendarData).reduce((s, a) => s + a.length, 0);
+  const activeDays   = Object.keys(calendarData).length;
+  const moodCounts   = { "🙂": 0, "😔": 0, "😡": 0, "😐": 0 };
   Object.values(calendarData).flat().forEach((e) => { if (e.mood) moodCounts[e.mood]++; });
-  const dominantMood  = Object.entries(moodCounts).sort((a, b) => b[1] - a[1])[0];
+  const dominantMood = Object.entries(moodCounts).sort((a, b) => b[1] - a[1])[0];
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8" style={{ minHeight: "calc(100dvh - 64px - 52px)" }}>
 
-      {/* ── Page header ─────────────────────────────────────────── */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
         <div>
           <h1 className="text-2xl font-bold">Calendar</h1>
           <p className="text-base-content/50 text-sm mt-0.5">See your journal entries by date</p>
         </div>
-
-        {/* Month nav */}
         <div className="flex items-center gap-2">
           <button onClick={prevMonth} className="btn btn-sm btn-ghost rounded-xl"><FaChevronLeft /></button>
           <span className="font-semibold text-base min-w-[148px] text-center">
@@ -243,7 +232,6 @@ const CalendarView = () => {
         </div>
       </div>
 
-      {/* ── Monthly stats ────────────────────────────────────────── */}
       {totalEntries > 0 && (
         <div className="grid grid-cols-3 gap-3 mb-5">
           <div className="bg-base-200 rounded-2xl p-3 text-center">
@@ -261,7 +249,6 @@ const CalendarView = () => {
         </div>
       )}
 
-      {/* ── Mood legend ──────────────────────────────────────────── */}
       <div className="flex gap-4 flex-wrap mb-4">
         {Object.entries(MOOD_DOT).map(([mood, cls]) => (
           <div key={mood} className="flex items-center gap-1.5 text-xs text-base-content/50">
@@ -271,7 +258,6 @@ const CalendarView = () => {
         ))}
       </div>
 
-      {/* ── Calendar ─────────────────────────────────────────────── */}
       {isLoading ? (
         <div className="flex justify-center py-20"><Loader /></div>
       ) : isError ? (
@@ -287,14 +273,12 @@ const CalendarView = () => {
         </div>
       )}
 
-      {/* ── Empty month notice ────────────────────────────────────── */}
       {!isLoading && !isError && totalEntries === 0 && (
         <p className="text-center text-base-content/40 text-sm mt-4">
           No entries this month. Start writing to see them here!
         </p>
       )}
 
-      {/* ── Day modal ────────────────────────────────────────────── */}
       <DayModal
         date={selectedDay}
         entries={selectedEntries}

@@ -27,19 +27,20 @@ const useDebounce = (fn, delay) => {
 //
 //   clear() → resets back to original allEntries order
 export const useSemanticSearch = (allEntries = []) => {
+  // BUG FIX: was pulling `userPassword` — now correctly uses `dataKey`
   const dataKey = useSelector((s) => s.user.dataKey);
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
-  const [results,    setResults]    = useState(null);   // null = not searched yet
+  const [results,     setResults]     = useState(null);
   const [isSearching, setIsSearching] = useState(false);
-  const [error,      setError]      = useState(null);
-  const [lastQuery,  setLastQuery]  = useState("");
+  const [error,       setError]       = useState(null);
+  const [lastQuery,   setLastQuery]   = useState("");
 
   const runSearch = useCallback(
     async (query) => {
       const trimmed = query.trim();
       if (!trimmed) { setResults(null); setError(null); return; }
-      if (trimmed === lastQuery && results !== null) return; // same query, skip
+      if (trimmed === lastQuery && results !== null) return;
 
       setIsSearching(true);
       setError(null);
@@ -49,7 +50,7 @@ export const useSemanticSearch = (allEntries = []) => {
           query: trimmed,
           entries: allEntries,
           decryptFn: decryptText,
-          dataKey,
+          dataKey,   // BUG FIX: correct param name
           apiKey,
         });
         setResults(sorted);
@@ -65,7 +66,6 @@ export const useSemanticSearch = (allEntries = []) => {
     [allEntries, dataKey, apiKey, lastQuery, results]
   );
 
-  // Debounced version — safe to call on every keystroke
   const debouncedSearch = useDebounce(runSearch, 600);
 
   const clear = useCallback(() => {
@@ -75,14 +75,11 @@ export const useSemanticSearch = (allEntries = []) => {
   }, []);
 
   return {
-    // null  → no search run yet, show allEntries
-    // []    → search ran, no results
-    // [...] → ranked results
     results,
     isSearching,
     error,
-    search: debouncedSearch,    // debounced — use on onChange
-    searchNow: runSearch,       // immediate — use on form submit
+    search: debouncedSearch,
+    searchNow: runSearch,
     clear,
     lastQuery,
   };

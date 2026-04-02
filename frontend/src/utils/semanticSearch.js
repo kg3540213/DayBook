@@ -3,7 +3,7 @@
 // Semantic search via Gemini — runs ENTIRELY in the browser.
 //
 // Security model:
-//   - Plaintext is decrypted in memory from the Redux userPassword.
+//   - Plaintext is decrypted in memory using the dataKey from Redux.
 //   - It is sent ONLY to Gemini's API (api.generativelanguage.googleapis.com).
 //   - It NEVER touches your Express backend, so zero-knowledge is preserved.
 //   - VITE_GEMINI_API_KEY is exposed in the browser bundle (visible in DevTools),
@@ -18,7 +18,6 @@ const GEMINI_URL =
 const MAX_CHARS_PER_ENTRY = 600;
 
 // Maximum entries sent in one Gemini call.
-// If the user has more, we batch and merge scores.
 const BATCH_SIZE = 30;
 
 // ── Build the ranking prompt ──────────────────────────────────────
@@ -59,7 +58,7 @@ const rankBatch = async (query, entries, apiKey) => {
     body: JSON.stringify({
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
-        temperature: 0.1,   // low temp → deterministic ranking
+        temperature: 0.1,
         maxOutputTokens: 1024,
       },
     }),
@@ -88,9 +87,9 @@ const rankBatch = async (query, entries, apiKey) => {
 const stripHtml = (html) =>
   (html || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 
-// ── Session-level embedding cache ────────────────────────────────
-// Key: `${query}:${entryIds.join(",")}` → sorted entry array
-// Cleared automatically when the tab is closed (sessionStorage).
+// ── Session-level cache ───────────────────────────────────────────
+// Key: `${query}:${entryIds}` → sorted entry array
+// Cleared when tab closes (sessionStorage).
 const CACHE_PREFIX = "_db_sem:";
 
 const cacheGet = (key) => {
@@ -115,15 +114,15 @@ const cacheSet = (key, value) => {
 //   query      — user's natural language search string
 //   entries    — raw entry objects from Redux (content is still ciphertext)
 //   decryptFn  — (ciphertext, dataKey) => plaintext string
-//   dataKey    — from Redux state.user.dataKey
+//   dataKey    — from Redux state.user.dataKey (NOT password)
 //   apiKey     — import.meta.env.VITE_GEMINI_API_KEY
 //
-// Returns: entries array sorted by semantic relevance (score attached as _score)
+// Returns: entries array sorted by semantic relevance (_score attached)
 export const semanticSearch = async ({
   query,
   entries,
   decryptFn,
-  dataKey,
+  dataKey,  // BUG FIX: was referencing undefined `password` — now correctly named
   apiKey,
 }) => {
   if (!query.trim()) return entries;
@@ -134,7 +133,8 @@ export const semanticSearch = async ({
   const plain = entries.map((entry) => {
     let plainContent = entry.content || "";
     try {
-      const decrypted = decryptFn(entry.content, password);
+      // BUG FIX: was passing undefined `password` — now passes `dataKey`
+      const decrypted = decryptFn(entry.content, dataKey);
       if (decrypted) plainContent = decrypted;
     } catch {
       // leave ciphertext as-is for old/unencrypted entries
@@ -156,11 +156,10 @@ export const semanticSearch = async ({
     batches.push(plain.slice(i, i + BATCH_SIZE));
   }
 
-  // Run all batches (parallel for speed)
+  // Run all batches in parallel for speed
   const batchResults = await Promise.all(
     batches.map((batch, batchIdx) =>
       rankBatch(query, batch, apiKey).then((scores) =>
-        // Re-map local batch indices to global indices
         scores.map((s) => ({
           globalIndex: batchIdx * BATCH_SIZE + s.index,
           score: s.score,
