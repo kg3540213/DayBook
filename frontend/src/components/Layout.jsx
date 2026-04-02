@@ -21,13 +21,11 @@ const Layout = () => {
   useEffect(() => {
     if (!isLoading) {
       if (profile) {
+        // profile = { message, data: { email, firstName, lastName, profilePhoto } }
+        // Store directly — state.user.data.data = { email, firstName, ... }
         dispatch(userInfo(profile));
 
-        // ── Restore encryption password after page refresh ──────────
-        // userPassword lives only in Redux (in-memory) and is lost on
-        // every refresh. sessionPassword.js persists it to sessionStorage
-        // (tab-scoped, auto-cleared on tab close) so we can restore it
-        // here without asking the user to log in again.
+        // Restore encryption password after page refresh
         const savedPassword = getPasswordFromSession();
         if (savedPassword) {
           dispatch(setUserPassword(savedPassword));
@@ -40,9 +38,7 @@ const Layout = () => {
   }, [profile, dispatch, isError, isLoading]);
 
   if (!isReady) {
-    const getTheme = localStorage.getItem("theme")
-      ? localStorage.getItem("theme")
-      : "dark";
+    const getTheme = localStorage.getItem("theme") || "dark";
     return (
       <div
         data-theme={getTheme}
@@ -86,9 +82,7 @@ const Layout = () => {
             </Link>
           </div>
 
-          {/* expanded=true shows mood + date filters in the sidebar */}
           <SearchBox toggle={toggle} expanded={true} />
-
           <NavLinks toggle={toggle} />
         </ul>
       </div>

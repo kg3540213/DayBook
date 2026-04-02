@@ -39,9 +39,13 @@ const NavProfile = () => {
     if (elem) elem?.blur();
   };
 
-  const photoUrl   = user?.data?.data?.profilePhoto ?? null;
-  const firstName  = user?.data?.data?.firstName    ?? "";
-  const lastName   = user?.data?.data?.lastName     ?? "";
+  // Safely extract from either login shape or profile shape
+  // Login:   state.data = { message, data: { _id, firstName, lastName, email } }
+  // Profile: state.data = { message, data: { email, firstName, lastName, profilePhoto } }
+  const userData   = user?.data ?? {};
+  const photoUrl   = userData.profilePhoto ?? null;
+  const firstName  = userData.firstName    ?? "";
+  const lastName   = userData.lastName     ?? "";
 
   return (
     <>

@@ -24,11 +24,22 @@ const userSlice = createSlice({
       state.userPassword = null;
       state.pendingEmail = null;
     },
-    // Called after a successful photo upload or delete so the avatar
-    // updates instantly everywhere without waiting for a profile refetch.
+    // Safely update profile photo regardless of nested state shape
     setProfilePhoto: (state, action) => {
-      if (state.data?.data) {
-        state.data.data.profilePhoto = action.payload; // null or URL string
+      if (!state.data) return;
+      // Shape after login/verifyOtp: { message, data: { _id, firstName, ... } }
+      // Shape after profile query:   { message, data: { email, firstName, profilePhoto, ... } }
+      if (state.data.data) {
+        state.data.data.profilePhoto = action.payload;
+      }
+    },
+    // Update name fields safely
+    setProfileName: (state, action) => {
+      if (!state.data) return;
+      const { firstName, lastName } = action.payload;
+      if (state.data.data) {
+        state.data.data.firstName = firstName;
+        state.data.data.lastName  = lastName;
       }
     },
   },
@@ -40,6 +51,7 @@ export const {
   setPendingEmail,
   removeUserInfo,
   setProfilePhoto,
+  setProfileName,
 } = userSlice.actions;
 
 export default userSlice.reducer;

@@ -1,112 +1,133 @@
 import { useState } from "react";
-import { useGetTodayFeedQuery, useCreatePostMutation, useGetUserPostCountQuery } from "../redux/api/postsApiSlice";
+import { useSelector } from "react-redux";
+import { Navigate } from "react-router-dom";
+import {
+  useGetTodayFeedQuery,
+  useCreatePostMutation,
+  useGetUserPostCountQuery,
+} from "../redux/api/postsApiSlice";
 import PostForm from "../components/post/PostForm";
 import PostCard from "../components/post/PostCard";
 import Loader from "../components/Loader";
 
 const TodayFeed = () => {
-  const { data: feedData, isLoading: feedLoading, error: feedError, refetch: refetchFeed } = useGetTodayFeedQuery();
-  const { data: countData, isLoading: countLoading, refetch: refetchCount } = useGetUserPostCountQuery();
+  const user = useSelector((state) => state.user.data);
+
+  // Redirect if not logged in
+  if (!user) return <Navigate to="/login" replace />;
+
+  const {
+    data: feedData,
+    isLoading: feedLoading,
+    error: feedError,
+    refetch: refetchFeed,
+  } = useGetTodayFeedQuery();
+
+  const {
+    data: countData,
+    isLoading: countLoading,
+    refetch: refetchCount,
+  } = useGetUserPostCountQuery();
+
   const [createPost, { isLoading: isCreating }] = useCreatePostMutation();
+
   const [showForm, setShowForm] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const posts = feedData?.posts || [];
-  const remainingPosts = countData?.remaining || 5;
+  const posts          = feedData?.posts ?? [];
+  const remainingPosts = countData?.remaining ?? 5;
+  const isCountLoading = countLoading;
 
   const handlePostSubmit = async (content) => {
     setErrorMsg("");
     try {
-      console.log("Creating post with content:", content);
+      // content is a plain string — postsApiSlice wraps it as { content }
       await createPost(content).unwrap();
-      console.log("Post created successfully!");
       setShowForm(false);
-      // Refetch both feed and count
       refetchFeed();
       refetchCount();
     } catch (err) {
       console.error("Post creation error:", err);
-      const errorMessage = err?.data?.error || err?.message || "Failed to create post";
+      const errorMessage =
+        err?.data?.error || err?.data?.message || err?.message || "Failed to create post";
       setErrorMsg(errorMessage);
     }
   };
 
+  const handleDelete = () => {
+    refetchFeed();
+    refetchCount();
+  };
+
   if (feedLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="flex justify-center items-center min-h-[calc(100dvh-64px-52px)]">
         <Loader />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-base-100 py-8">
+    <div className="min-h-[calc(100dvh-64px-52px)] py-8">
       <div className="max-w-2xl mx-auto px-4">
-        {/* Header */}
+
+        {/* ── Header ──────────────────────────────────────────── */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-2">🌍 LPU Today Feed</h1>
-          
+          <p className="text-primary text-xs font-bold tracking-widest uppercase mb-2">LPU Community</p>
+          <h1 className="text-3xl sm:text-4xl font-black mb-3 tracking-tight">
+            🌍 Today&apos;s Feed
+          </h1>
+
           {/* Public Warning */}
-          <div className="alert alert-info shadow-lg mb-4">
-            <div>
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                fill="none"
-                viewBox="0 0 24 24"
-                className="h-6 w-6 shrink-0 stroke-current"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth="2"
-                  d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                ></path>
-              </svg>
-              <p className="text-sm">
-                <strong>🌍 Public Feed:</strong> This is a public feed visible to all LPU users. Do not share personal or sensitive information.
-              </p>
-            </div>
+          <div className="alert bg-info/10 border border-info/30 rounded-2xl mb-4 py-3">
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              fill="none"
+              viewBox="0 0 24 24"
+              className="h-5 w-5 shrink-0 stroke-info"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+                d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <p className="text-sm text-info">
+              <strong>Public Feed:</strong> Visible to all LPU users. Don&apos;t share personal or sensitive info.
+            </p>
           </div>
 
-          <p className="text-gray-600 dark:text-gray-400">
-            Share what's happening at LPU today. Posts automatically disappear at midnight ⏰
+          <p className="text-base-content/60 text-sm">
+            Share what&apos;s happening at LPU today. Posts disappear at midnight ⏰
           </p>
         </div>
 
-        {/* Create Post Section */}
+        {/* ── Create Post ──────────────────────────────────────── */}
         <div className="mb-8">
-          {remainingPosts > 0 ? (
+          {isCountLoading ? (
+            <div className="h-12 bg-base-200 rounded-2xl animate-pulse" />
+          ) : remainingPosts > 0 ? (
             <>
               {!showForm ? (
                 <button
                   onClick={() => setShowForm(true)}
-                  className="btn btn-primary w-full"
+                  className="btn btn-primary w-full rounded-2xl shadow-lg hover:shadow-primary/30 hover:-translate-y-0.5 transition-all duration-200"
                 >
-                  ✨ Create Today's Post
+                  ✨ Share Something Today
                 </button>
               ) : (
-                <div className="card bg-surface shadow-lg">
-                  <div className="card-body">
-                    <h2 className="card-title">Share What's Happening</h2>
-                    <div className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-                      {remainingPosts} post{remainingPosts !== 1 ? "s" : ""} remaining today
+                <div className="card bg-base-200 rounded-3xl border border-base-300 shadow-lg">
+                  <div className="card-body p-5">
+                    <div className="flex justify-between items-center mb-3">
+                      <h2 className="font-bold text-base">Share What&apos;s Happening</h2>
+                      <span className="badge badge-ghost badge-sm">
+                        {remainingPosts} post{remainingPosts !== 1 ? "s" : ""} left today
+                      </span>
                     </div>
 
                     {errorMsg && (
-                      <div className="alert alert-error shadow-lg">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-6 w-6 shrink-0 stroke-current"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth="2"
-                            d="M10 14l-2-2m0 0l-2-2m2 2l2-2m-2 2l-2 2m2-2l2 2m-2-2l-2-2m2 2l2 2"
-                          />
-                        </svg>
+                      <div className="alert alert-error rounded-xl py-2 text-sm mb-3">
                         <span>{errorMsg}</span>
                       </div>
                     )}
@@ -124,10 +145,10 @@ const TodayFeed = () => {
               )}
             </>
           ) : (
-            <div className="alert alert-warning shadow-lg">
+            <div className="alert bg-warning/10 border border-warning/30 rounded-2xl py-3">
               <svg
                 xmlns="http://www.w3.org/2000/svg"
-                className="h-6 w-6 shrink-0 stroke-current"
+                className="h-5 w-5 shrink-0 stroke-warning"
                 fill="none"
                 viewBox="0 0 24 24"
               >
@@ -135,58 +156,55 @@ const TodayFeed = () => {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth="2"
-                  d="M12 9v2m0 4v2m0 4v2M7 9h.01M7 13h.01M7 17h.01M11 9h.01M11 13h.01M11 17h.01M15 9h.01M15 13h.01M15 17h.01"
+                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
                 />
               </svg>
-              <span>You've reached your daily post limit (5). Try again tomorrow! 📅</span>
+              <span className="text-sm text-warning-content">
+                You&apos;ve reached your daily limit of 5 posts. Try again tomorrow! 📅
+              </span>
             </div>
           )}
         </div>
 
-        {/* Feed Error */}
+        {/* ── Feed Error ────────────────────────────────────────── */}
         {feedError && (
-          <div className="alert alert-error shadow-lg mb-4">
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6 shrink-0 stroke-current"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth="2"
-                d="M12 8v4m0 4v.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-              />
-            </svg>
-            <span>Failed to load feed. Please try refreshing the page.</span>
+          <div className="alert alert-error rounded-2xl mb-4 text-sm">
+            <span>Failed to load feed. Please refresh the page.</span>
           </div>
         )}
 
-        {/* Posts Feed */}
+        {/* ── Posts Feed ────────────────────────────────────────── */}
         <div>
-          <div className="mb-6">
-            <h2 className="text-2xl font-bold">
-              Today's Posts ({posts.length})
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="font-bold text-lg">
+              Today&apos;s Posts
+              <span className="ml-2 badge badge-primary badge-sm">{posts.length}</span>
             </h2>
+            <button
+              onClick={() => refetchFeed()}
+              className="btn btn-ghost btn-xs rounded-xl text-base-content/50 hover:text-base-content"
+            >
+              ↻ Refresh
+            </button>
           </div>
 
           {posts.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-gray-500 dark:text-gray-400 text-lg">
-                No posts yet... Be the first! 🚀
+            <div className="text-center py-16">
+              <span className="text-5xl block mb-4">🌅</span>
+              <p className="text-base-content/50 text-lg font-medium">
+                No posts yet today
+              </p>
+              <p className="text-base-content/40 text-sm mt-1">
+                Be the first to share something! 🚀
               </p>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="flex flex-col gap-4">
               {posts.map((post) => (
-                <PostCard 
-                  key={post._id} 
-                  post={post} 
-                  onDelete={() => {
-                    refetchFeed();
-                    refetchCount();
-                  }} 
+                <PostCard
+                  key={post._id}
+                  post={post}
+                  onDelete={handleDelete}
                 />
               ))}
             </div>

@@ -6,23 +6,24 @@ import { useSelector } from "react-redux";
 const PostCard = ({ post, onDelete }) => {
   const [deletePost, { isLoading: isDeleting }] = useDeletePostMutation();
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
-  const userState = useSelector((state) => state.user);
-  const currentUserId = userState?.data?.data?._id || userState?.data?._id;
-  const isOwner = currentUserId === post.userId;
 
-  // Calculate time ago
+  const userState = useSelector((state) => state.user);
+  // Handle both login and profile response shapes
+  const userData = userState?.data?.data ?? {};
+  const currentUserId = userData._id ?? userState?.data?._id;
+  const isOwner = currentUserId && post.userId && currentUserId.toString() === post.userId.toString();
+
   const getTimeAgo = (date) => {
-    const now = new Date();
+    const now      = new Date();
     const postDate = new Date(date);
-    const diffMs = now - postDate;
+    const diffMs   = now - postDate;
     const diffMins = Math.floor(diffMs / 60000);
     const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
 
-    if (diffMins < 1) return "just now";
+    if (diffMins < 1)  return "just now";
     if (diffMins < 60) return `${diffMins}m ago`;
     if (diffHours < 24) return `${diffHours}h ago`;
-    return `${diffDays}d ago`;
+    return `${Math.floor(diffMs / 86400000)}d ago`;
   };
 
   const handleDelete = async () => {
@@ -35,37 +36,47 @@ const PostCard = ({ post, onDelete }) => {
     }
   };
 
+  // Derive initials from userName
+  const nameParts = (post.userName || "?").split(" ");
+  const initials  = nameParts.map((p) => p[0] ?? "").join("").slice(0, 2).toUpperCase();
+
   return (
-    <div className="card bg-surface border border-base-300 shadow-md hover:shadow-lg transition-shadow">
-      <div className="card-body">
-        {/* Header */}
-        <div className="flex justify-between items-start mb-2">
-          <div>
-            <h3 className="font-semibold text-lg">{post.userName}</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {getTimeAgo(post.createdAt)}
-            </p>
+    <div className="card bg-base-200 border border-base-300 rounded-3xl hover:border-base-content/20 hover:shadow-md transition-all duration-200">
+      <div className="card-body p-5">
+        {/* ── Header ──────────────────────────────────────── */}
+        <div className="flex justify-between items-start gap-3">
+          <div className="flex items-center gap-3">
+            {/* Avatar with initials */}
+            <div className="w-9 h-9 rounded-full bg-primary/20 border border-primary/30 flex items-center justify-center text-xs font-bold text-primary shrink-0 select-none">
+              {initials}
+            </div>
+            <div>
+              <p className="font-semibold text-sm leading-tight">{post.userName}</p>
+              <p className="text-xs text-base-content/40 mt-0.5">
+                {getTimeAgo(post.createdAt)}
+              </p>
+            </div>
           </div>
 
-          {/* Delete Button (Only for post owner) */}
+          {/* Delete (owner only) */}
           {isOwner && (
-            <div>
+            <div className="shrink-0">
               {showDeleteConfirm ? (
-                <div className="flex gap-2">
+                <div className="flex gap-1.5">
                   <button
                     onClick={handleDelete}
-                    className="btn btn-sm btn-error btn-outline"
+                    className="btn btn-xs btn-error rounded-lg"
                     disabled={isDeleting}
                   >
                     {isDeleting ? (
-                      <span className="loading loading-spinner loading-xs"></span>
+                      <span className="loading loading-spinner loading-xs" />
                     ) : (
-                      "Confirm"
+                      "Delete"
                     )}
                   </button>
                   <button
                     onClick={() => setShowDeleteConfirm(false)}
-                    className="btn btn-sm btn-ghost"
+                    className="btn btn-xs btn-ghost rounded-lg"
                     disabled={isDeleting}
                   >
                     Cancel
@@ -74,18 +85,20 @@ const PostCard = ({ post, onDelete }) => {
               ) : (
                 <button
                   onClick={() => setShowDeleteConfirm(true)}
-                  className="btn btn-sm btn-ghost text-error"
+                  className="btn btn-xs btn-ghost text-error rounded-lg"
                   title="Delete your post"
                 >
-                  🗑️ Delete
+                  🗑️
                 </button>
               )}
             </div>
           )}
         </div>
 
-        {/* Content */}
-        <p className="text-base break-words">{post.content}</p>
+        {/* ── Content ─────────────────────────────────────── */}
+        <p className="text-sm leading-relaxed break-words mt-1 text-base-content/85">
+          {post.content}
+        </p>
       </div>
     </div>
   );
@@ -93,10 +106,10 @@ const PostCard = ({ post, onDelete }) => {
 
 PostCard.propTypes = {
   post: PropTypes.shape({
-    _id: PropTypes.string.isRequired,
-    userName: PropTypes.string.isRequired,
-    userId: PropTypes.string.isRequired,
-    content: PropTypes.string.isRequired,
+    _id:       PropTypes.string.isRequired,
+    userName:  PropTypes.string.isRequired,
+    userId:    PropTypes.string.isRequired,
+    content:   PropTypes.string.isRequired,
     createdAt: PropTypes.string.isRequired,
   }).isRequired,
   onDelete: PropTypes.func.isRequired,
