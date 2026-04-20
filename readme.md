@@ -1,5 +1,9 @@
 # 📓 DayBook
 
+[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
+[![React Version](https://img.shields.io/badge/react-19.0.0-blue)](https://reactjs.org/)
+
 A **secure, private journaling platform** exclusively for **LPU (Lovely Professional University)** students. Write freely, express yourself — every entry is **AES-256 encrypted client-side** before it ever reaches the server. Even the developer cannot read your entries.
 
 **Live Demo:** [https://lpudaybook.onrender.com](https://lpudaybook.onrender.com)
@@ -32,8 +36,8 @@ A **secure, private journaling platform** exclusively for **LPU (Lovely Professi
 - **🔒 Password Encryption** — Bcrypt hashing for passwords and OTPs
 
 ### AI & Analytics
-- **🤖 AI Mood Detection** — Powered by **Gemini 2.0 Flash** — paste content and let AI detect mood automatically
-- **😊 Mood Tracking** — Log mood (😊 Happy, 😔 Sad, 😡 Angry, 😐 Neutral) with every entry
+- **🤖 AI Mood Detection** — Powered by **Google Gemini 2.0 Flash** — paste content and let AI detect mood automatically
+- **😊 Mood Tracking** — Log mood (🙂 Happy, 😔 Sad, 😡 Angry, 😐 Neutral) with every entry
 - **📊 Analytics Dashboard** — Visual charts for:
   - Mood distribution and patterns
   - Writing streaks and activity
@@ -57,30 +61,32 @@ A **secure, private journaling platform** exclusively for **LPU (Lovely Professi
 ## 🛠️ Tech Stack
 
 ### Frontend
-| Technology | Purpose |
-|---|---|
-| **React 19** | UI framework |
-| **React Router v7** | Client-side routing |
-| **Redux Toolkit + RTK Query** | State management & API caching |
-| **Tailwind CSS v4 + DaisyUI** | Styling & pre-built components |
-| **React Toastify** | Toast notifications |
-| **Recharts** | Analytics visualizations |
-| **React Icons** | Iconography |
-| **Crypto-JS** | Client-side AES-256 encryption |
+| Technology | Version | Purpose |
+|---|---|---|
+| **React** | 19.0.0 | UI framework |
+| **React Router** | v7.2.0 | Client-side routing |
+| **Redux Toolkit + RTK Query** | 2.6.0 | State management & API caching |
+| **Tailwind CSS v4 + DaisyUI** | 4.0.9 / 5.0.0 | Styling & pre-built components |
+| **React Toastify** | 11.0.5 | Toast notifications |
+| **Recharts** | 3.8.0 | Analytics visualizations |
+| **React Icons** | 5.5.0 | Iconography |
+| **Crypto-JS** | 4.2.0 | Client-side AES-256 encryption |
+| **Socket.IO Client** | 4.8.3 | Real-time communication |
 
 ### Backend
-| Technology | Purpose |
-|---|---|
-| **Node.js + Express** | REST API server |
-| **MongoDB + Mongoose** | NoSQL database & ODM |
-| **Redis (IoRedis)** | Caching & session storage |
-| **JWT + httpOnly Cookies** | Authentication & authorization |
-| **Bcryptjs** | Password & OTP hashing |
-| **Cloudinary** | Image storage & optimization |
-| **Nodemailer** | Email delivery (OTP verification) |
-| **Google Gemini API** | AI mood detection |
-| **Helmet** | HTTP security headers |
-| **Morgan** | HTTP request logging |
+| Technology | Version | Purpose |
+|---|---|---|
+| **Node.js + Express** | 21.1.1 | REST API server |
+| **MongoDB + Mongoose** | 8.8.3 | NoSQL database & ODM |
+| **Redis (IoRedis)** | 5.10.1 | Caching & session storage |
+| **JWT + httpOnly Cookies** | 9.0.2 | Authentication & authorization |
+| **Bcryptjs** | 3.0.2 | Password & OTP hashing |
+| **Cloudinary** | 2.9.0 | Image storage & optimization |
+| **Nodemailer/Resend** | 8.0.3 / 6.9.4 | Email delivery (OTP verification) |
+| **Google Gemini API** | - | AI mood detection |
+| **Helmet** | 8.1.0 | HTTP security headers |
+| **Morgan** | 1.10.1 | HTTP request logging |
+| **Express Rate Limit** | 8.3.1 | API rate limiting |
 
 ---
 
@@ -322,7 +328,7 @@ npm start
 
 ---
 
-## � Docker Support
+## 🐳 Docker Support
 
 The project includes a **Dockerfile** for containerized deployment. The Docker configuration uses a multi-stage build to optimize the final image size.
 
@@ -520,20 +526,34 @@ Timeline:
 
 ---
 
-### End-to-End Encryption
-- **Client-Side Encryption**: All entries are encrypted with **AES-256** using CryptoJS
-- **Key Derivation**: Uses your password as the encryption key
-- **Server-Side Storage**: Only ciphertext is stored in MongoDB
-- **Decryption**: Happens only in your browser after authentication
-- **Impact**: Even database administrators cannot read your private entries
+### End-to-End Encryption Details 🔐
 
-### Authentication & Authorization
-- **Email Verification**: OTP-based verification for new signups
-- **JWT Tokens**: Secure, stateless authentication with httpOnly cookies
-- **Password Security**: Bcrypt hashing with salt rounds
-- **CORS Protection**: Restricted to LPU domain origins
-- **Rate Limiting**: Protects API endpoints from brute force attacks
-- **LPU-Only Access**: Domain validation on both frontend and backend
+**How Entry Encryption Works (Simple English):**
+
+1. **When You Log In:**
+   - Your password is run through a special mathematical function (PBKDF2) **100,000 times** to create a unique encryption key
+   - This key is stored temporarily in your browser's memory (sessionStorage) and **automatically deleted when you close the tab**
+   - Your password **never leaves your browser**
+
+2. **When You Write an Entry:**
+   - You type your journal content
+   - The app generates a random "IV" (like a unique grain of salt) for this specific entry
+   - The app combines your encryption key + the IV + AES-256 algorithm to scramble your content into unreadable gibberish
+   - The IV and encrypted content are sent to the server together
+   - **Format stored:** `<IV>:<EncryptedContent>` (both in base64)
+
+3. **When You Read an Entry:**
+   - The app fetches the encrypted content from the server
+   - It extracts the IV and encrypted content
+   - Using your password-derived key (still in your browser's memory) + the IV, it decrypts the gibberish back into readable text
+   - You see your journal entry on the screen
+
+**Security Benefits:**
+- ✅ **Your password never leaves your browser**
+- ✅ **Each entry uses a different random IV**, so identical entries look different when encrypted
+- ✅ **Encryption key is cleared automatically** when you close the browser tab
+- ✅ **On password change**, all entries are inaccessible until you log back in with the new password (security boundary)
+- ⚠️ **Legacy entries** (created before encryption was added) are stored plain-text as fallback
 
 ---
 
@@ -549,7 +569,7 @@ Timeline:
 
 ---
 
-## 📦 Deployment
+## � Deployment
 
 ### Docker Deployment (Recommended)
 
@@ -612,7 +632,59 @@ Contributions are welcome! Please follow these steps:
 
 ---
 
-## 📝 License
+## � Technical Encryption Details
+
+### Client-Side AES-256-CBC Implementation
+
+**Key Derivation:**
+- Uses PBKDF2-SHA256 with 100,000 iterations
+- Salt is deterministically derived from password: `CryptoJS.SHA256(password)`
+- Produces 256-bit AES key stored in sessionStorage as base64
+
+**Encryption Process:**
+```javascript
+// Generate fresh random IV for each entry
+const iv = CryptoJS.lib.WordArray.random(16);
+
+// Encrypt with AES-256-CBC
+const cipher = CryptoJS.AES.encrypt(plaintext, key, {
+  iv,
+  mode: CryptoJS.mode.CBC,
+  padding: CryptoJS.pad.Pkcs7,
+});
+
+// Store format: "ivBase64:ciphertextBase64"
+const encrypted = iv.toString(CryptoJS.enc.Base64) + ":" + 
+                  cipher.ciphertext.toString(CryptoJS.enc.Base64);
+```
+
+**Decryption Process:**
+```javascript
+// Parse IV and ciphertext
+const [ivB64, ctB64] = encrypted.split(":");
+const iv = CryptoJS.enc.Base64.parse(ivB64);
+const ciphertext = CryptoJS.enc.Base64.parse(ctB64);
+
+// Decrypt
+const decrypted = CryptoJS.AES.decrypt({ ciphertext }, key, {
+  iv,
+  mode: CryptoJS.mode.CBC,
+  padding: CryptoJS.pad.Pkcs7,
+});
+
+const plaintext = decrypted.toString(CryptoJS.enc.Utf8);
+```
+
+**Security Boundaries:**
+- Key exists only in browser memory (sessionStorage)
+- Each entry uses unique random IV
+- Password never transmitted to server
+- Server stores only ciphertext
+- Legacy plain-text entries supported for backward compatibility
+
+---
+
+## �📝 License
 
 This project is licensed under the **ISC License**. See [LICENSE](LICENSE) file for details.
 
