@@ -197,6 +197,28 @@ DayBook/
 - **Cloudinary** account (for image storage)
 - **Google Gemini API** key (for AI mood detection)
 - **Email service** (Nodemailer/Resend configured)
+- *Optional:* **Docker** & **Docker Compose** for containerized setup
+
+### Quick Start with Docker (Recommended)
+```bash
+# Clone and setup
+git clone https://github.com/kg3540213/DayBook.git
+cd DayBook
+
+# Create .env file with your configuration
+cp .env.example .env
+
+# Build and run with Docker Compose
+docker-compose up -d
+```
+
+The application will be available at:
+- **Frontend**: http://localhost:3000
+- **Backend API**: http://localhost:5000
+- **MongoDB**: localhost:27017
+- **Redis**: localhost:6379
+
+### Manual Installation (Without Docker)
 
 ### Environment Variables
 
@@ -299,7 +321,64 @@ npm start
 
 ---
 
-## 📡 API Endpoints
+## � Docker Support
+
+The project includes a **Dockerfile** for containerized deployment. The Docker configuration uses a multi-stage build to optimize the final image size.
+
+### Build Docker Image
+```bash
+docker build -t daybook:latest .
+```
+
+### Run with Docker
+```bash
+docker run -p 5000:5000 \
+  -e MONGODB_URI=mongodb+srv://user:password@cluster.mongodb.net/daybook \
+  -e REDIS_URL=redis://your-redis-url \
+  -e FRONTEND_URL=https://your-frontend-url \
+  -e JWT_SECRET=your_jwt_secret \
+  -e GEMINI_API_KEY=your_gemini_key \
+  -e RESEND_API_KEY=your_resend_key \
+  daybook:latest
+```
+
+### Docker Compose (Optional)
+Create a `docker-compose.yml` for local development:
+```yaml
+version: '3.8'
+services:
+  app:
+    build: .
+    ports:
+      - "5000:5000"
+    environment:
+      - MONGODB_URI=mongodb://mongo:27017/daybook
+      - REDIS_URL=redis://redis:6379
+      - FRONTEND_URL=http://localhost:3000
+    depends_on:
+      - mongo
+      - redis
+  mongo:
+    image: mongo:7-alpine
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+volumes:
+  mongo_data:
+  redis_data:
+```
+
+---
+
+## �📡 API Endpoints
 
 ### Authentication (`/api/auth`)
 | Method | Endpoint | Description |
@@ -471,32 +550,46 @@ Timeline:
 
 ## 📦 Deployment
 
-The project is deployed on **Render**:
-- **Frontend**: Hosted on Render (static site)
-- **Backend**: Node.js server on Render
-- **Database**: MongoDB Atlas
-- **Cache**: Redis Cloud
-- **Storage**: Cloudinary
+### Docker Deployment (Recommended)
+
+The project includes a **Dockerfile** with multi-stage build optimization. Deploy using Docker for consistency across environments.
+
+**Build the image:**
+```bash
+docker build -t daybook:latest .
+```
+
+**Docker Compose (Local Development):**
+```bash
+docker-compose up -d
+```
+
+Create a `docker-compose.yml` with MongoDB and Redis services for complete local development.
 
 ### Deploy to Render
 
-**Backend:**
+**Backend (Node.js Server):**
 1. Push to GitHub
 2. Create new Render service → Web Service
 3. Select GitHub repository
 4. Set build command: `npm install`
 5. Set start command: `npm start`
-6. Add environment variables
+6. Add environment variables (MongoDB, Redis, JWT, Gemini, etc.)
 7. Deploy
 
-**Frontend:**
+**Frontend (Static Site):**
 1. Build: `npm run build`
-2. Rename `.env` to `.env.static` (optional)
-3. Push to GitHub
-4. Create Render Static Site
-5. Set build command: `cd frontend && npm install && npm run build`
-6. Set publish directory: `frontend/dist`
-7. Deploy
+2. Push to GitHub
+3. Create Render Static Site
+4. Set build command: `cd frontend && npm install && npm run build`
+5. Set publish directory: `frontend/dist`
+6. Deploy
+
+**Services Used:**
+- **Database**: MongoDB Atlas
+- **Cache**: Redis Cloud
+- **Storage**: Cloudinary CDN
+- **Hosting**: Render (Backend & Frontend)
 
 ---
 

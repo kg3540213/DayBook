@@ -44,10 +44,11 @@ export const encryptDataKey = (dataKeyBase64, password) => {
 
   const cipher = CryptoJS.AES.encrypt(dataKeyBase64, key, {
     iv,
-    mode:    CryptoJS.mode.CBC,
+    mode:    CryptoJS.mode.GCM,
     padding: CryptoJS.pad.Pkcs7,
   });
 
+  // In CryptoJS GCM, the auth tag is included in ciphertext
   return [
     salt.toString(CryptoJS.enc.Base64),
     iv.toString(CryptoJS.enc.Base64),
@@ -96,7 +97,7 @@ export const encryptEntry = (plaintext, dataKeyBase64) => {
 
   const cipher = CryptoJS.AES.encrypt(plaintext, key, {
     iv,
-    mode:    CryptoJS.mode.CBC,
+    mode:    CryptoJS.mode.GCM,
     padding: CryptoJS.pad.Pkcs7,
   });
 
@@ -118,7 +119,7 @@ export const decryptEntry = (encryptedContent, dataKeyBase64) => {
   const decrypted = CryptoJS.AES.decrypt(
     { ciphertext },
     key,
-    { iv, mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.Pkcs7 }
+    { iv, mode: CryptoJS.mode.GCM, padding: CryptoJS.pad.Pkcs7 }
   );
 
   return decrypted.toString(CryptoJS.enc.Utf8);

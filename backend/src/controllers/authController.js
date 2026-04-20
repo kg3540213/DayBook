@@ -1,7 +1,3 @@
-// backend/src/controllers/authController.js
-// Only the changePassword function is changed — all others are identical to the
-// original. The fix: return `encryptedDataKey` in the response so the frontend
-// can immediately re-derive the dataKey without a separate profile fetch.
 const User = require("../models/userModel");
 const bcrypt = require("bcryptjs");
 const validator = require("validator");
@@ -9,7 +5,7 @@ const generateToken = require("../utils/generateToken");
 const { sendOtpEmail } = require("../services/EmailService");
 const crypto = require("crypto");
 
-const generateOtp = () =>
+const generateOtp = () => 
   crypto.randomInt(100000, 999999).toString();
 
 // ── Data key encryption helpers ───────────────────────────────────
