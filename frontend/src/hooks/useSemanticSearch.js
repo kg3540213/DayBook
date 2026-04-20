@@ -1,10 +1,12 @@
 // frontend/src/hooks/useSemanticSearch.js
+//
+// Option A change: useSelector reads state.user.encKey (was state.user.dataKey)
+
 import { useState, useCallback, useRef } from "react";
 import { useSelector } from "react-redux";
 import { semanticSearch } from "../utils/semanticSearch";
 import { decryptText } from "../utils/crypto";
 
-// Debounce helper — prevents spamming Gemini on every keystroke
 const useDebounce = (fn, delay) => {
   const timer = useRef(null);
   return useCallback(
@@ -17,18 +19,9 @@ const useDebounce = (fn, delay) => {
   );
 };
 
-// ── Hook ──────────────────────────────────────────────────────────
-// Usage:
-//   const { results, isSearching, error, search, clear } = useSemanticSearch(allEntries);
-//
-//   search("entries where I felt anxious about exams")
-//   → sets results to semantically ranked entry array
-//   → each entry has a ._score (0.0–1.0) you can show as a relevance badge
-//
-//   clear() → resets back to original allEntries order
 export const useSemanticSearch = (allEntries = []) => {
-  // BUG FIX: was pulling `userPassword` — now correctly uses `dataKey`
-  const dataKey = useSelector((s) => s.user.dataKey);
+  // Option A: read encKey (was dataKey)
+  const encKey = useSelector((s) => s.user.encKey);
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
 
   const [results,     setResults]     = useState(null);
@@ -47,10 +40,10 @@ export const useSemanticSearch = (allEntries = []) => {
 
       try {
         const sorted = await semanticSearch({
-          query: trimmed,
-          entries: allEntries,
+          query:     trimmed,
+          entries:   allEntries,
           decryptFn: decryptText,
-          dataKey,   // BUG FIX: correct param name
+          encKey,    // Option A: pass encKey
           apiKey,
         });
         setResults(sorted);
@@ -63,7 +56,7 @@ export const useSemanticSearch = (allEntries = []) => {
         setIsSearching(false);
       }
     },
-    [allEntries, dataKey, apiKey, lastQuery, results]
+    [allEntries, encKey, apiKey, lastQuery, results]
   );
 
   const debouncedSearch = useDebounce(runSearch, 600);
@@ -74,13 +67,5 @@ export const useSemanticSearch = (allEntries = []) => {
     setLastQuery("");
   }, []);
 
-  return {
-    results,
-    isSearching,
-    error,
-    search: debouncedSearch,
-    searchNow: runSearch,
-    clear,
-    lastQuery,
-  };
+  return { results, isSearching, error, search: debouncedSearch, searchNow: runSearch, clear, lastQuery };
 };

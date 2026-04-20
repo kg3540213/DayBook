@@ -1,15 +1,18 @@
 // frontend/src/components/Layout.jsx
-// Improvement: cleaner dataKey restoration logic with explicit error states
-// and no silent failures that could leave the user with broken encryption.
+//
+// Option A changes:
+//   - No encryptedDataKey / decryptDataKey logic
+//   - On reload: restore encKey directly from sessionStorage via restoreKeyFromSession()
+//   - If not found: user must log in again (session expired / tab was closed)
+
 import Navbar from "./navbar/Navbar";
 import { Link, Outlet } from "react-router-dom";
 import Footer from "./Footer";
 import { useEffect, useState } from "react";
 import { useProfileQuery } from "../redux/api/usersApiSlice";
 import { useDispatch } from "react-redux";
-import { removeUserInfo, userInfo, setUserDataKey } from "../redux/features/userSlice";
-import { getPasswordFromSession } from "../utils/sessionPassword";
-import { decryptDataKey } from "../utils/crypto";
+import { removeUserInfo, userInfo, setEncKey } from "../redux/features/userSlice";
+import { restoreKeyFromSession } from "../utils/crypto";
 import Loader from "./Loader";
 import NavLinks from "./navbar/NavLinks";
 import SearchBox from "./navbar/SearchBox";
@@ -17,10 +20,10 @@ import logo from "../assets/logo.svg";
 
 const Layout = () => {
   const { data: profile, isError, isLoading } = useProfileQuery();
-  const dispatch = useDispatch();
+  const dispatch  = useDispatch();
   const [isReady, setIsReady] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
-  const toggle = () => setIsDrawerOpen(!isDrawerOpen);
+  const toggle = () => setIsDrawerOpen((v) => !v);
 
   useEffect(() => {
     if (isLoading) return;
@@ -29,26 +32,16 @@ const Layout = () => {
       // Store user profile in Redux
       dispatch(userInfo(profile));
 
-      // Attempt to restore dataKey from the password saved in sessionStorage.
-      // This only works within the same browser session (tab group) — by design.
-      // If sessionStorage is cleared (tab close, explicit logout), the user must
-      // re-enter their password on next login.
-      const savedPassword = getPasswordFromSession();
-      const encryptedDataKey = profile?.data?.encryptedDataKey;
-
-      if (savedPassword && encryptedDataKey) {
-        try {
-          const dataKey = decryptDataKey(encryptedDataKey, savedPassword);
-          dispatch(setUserDataKey(dataKey));
-        } catch (err) {
-          // Password in sessionStorage doesn't match the current encryptedDataKey.
-          // This can happen if the user changed their password in another tab.
-          // Safe to ignore — user will just need to log in again to get the key.
-          console.warn("[Layout] Could not restore dataKey from session:", err.message);
-        }
+      // Restore the AES key from sessionStorage (set at login / signup).
+      // sessionStorage survives page reloads within the same tab but is
+      // cleared when the tab or browser is closed — by design.
+      const storedKey = restoreKeyFromSession();
+      if (storedKey) {
+        dispatch(setEncKey(storedKey));
       }
-      // If no savedPassword: dataKey stays null. The app renders correctly but
-      // encrypted entry content shows as unreadable until the user logs in again.
+      // If storedKey is null the session expired.
+      // encKey stays null → entries show as unreadable ciphertext until
+      // the user logs out and back in. This is the correct security behaviour.
     } else if (isError) {
       dispatch(removeUserInfo());
     }
@@ -88,7 +81,7 @@ const Layout = () => {
           htmlFor="my-drawer-3"
           aria-label="close sidebar"
           className="drawer-overlay"
-        ></label>
+        />
         <ul className="menu bg-base-200 min-h-screen w-80 p-4">
           <div className="py-4 pb-5">
             <Link

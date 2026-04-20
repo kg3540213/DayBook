@@ -1,3 +1,7 @@
+// frontend/src/components/entry/AddEntry.jsx
+//
+// Option A change: useSelector reads state.user.encKey (was state.user.dataKey)
+
 import ModalLayout from "../ModalLayout";
 import { useEffect, useRef, useState } from "react";
 import { FaPlus, FaMicrophone, FaMicrophoneSlash } from "react-icons/fa";
@@ -10,13 +14,12 @@ import EntryTemplates from "./EntryTemplates";
 import TagInput from "./TagInput";
 
 const MOODS = [
-  { value: "🙂", label: "🙂 Happy" },
-  { value: "😔", label: "😔 Sad" },
-  { value: "😡", label: "😡 Angry" },
+  { value: "🙂", label: "🙂 Happy"   },
+  { value: "😔", label: "😔 Sad"     },
+  { value: "😡", label: "😡 Angry"   },
   { value: "😐", label: "😐 Neutral" },
 ];
 
-// Mood → soft gradient accent on the modal header area
 const MOOD_THEMES = {
   "🙂": "from-emerald-500/10 to-transparent",
   "😔": "from-blue-500/10 to-transparent",
@@ -25,12 +28,13 @@ const MOOD_THEMES = {
 };
 
 function AddEntry() {
-  const [open, setOpen]                               = useState(false);
-  const [addEntry,    { isLoading }]                  = useAddEntryMutation();
-  const [analyzeMood, { isLoading: isAnalyzing }]     = useAnalyzeMoodMutation();
-  const dataKey                                      = useSelector((s) => s.user.dataKey);
+  const [open, setOpen]                             = useState(false);
+  const [addEntry,    { isLoading }]                = useAddEntryMutation();
+  const [analyzeMood, { isLoading: isAnalyzing }]   = useAnalyzeMoodMutation();
 
-  // ── Derive tag suggestions from already-cached entries (no extra endpoint) ──
+  // Option A: read encKey (was dataKey)
+  const encKey = useSelector((s) => s.user.encKey);
+
   const { data: allEntriesData } = useGetEntriesQuery();
   const existingTags = [...new Set((allEntriesData?.data ?? []).flatMap((e) => e.tags ?? []))];
 
@@ -41,14 +45,12 @@ function AddEntry() {
   });
   const [selectedTemplate, setSelectedTemplate] = useState(null);
 
-  // ── Voice-to-text ─────────────────────────────────────────────────
   const [isRecording, setIsRecording] = useState(false);
   const [voiceSupported]              = useState(
     () => "webkitSpeechRecognition" in window || "SpeechRecognition" in window
   );
   const recognitionRef = useRef(null);
 
-  // Reset form on open/close
   useEffect(() => {
     setFormData({
       title: "", mood: "🙂", content: "",
@@ -57,16 +59,15 @@ function AddEntry() {
     });
     setSelectedTemplate(null);
     stopRecording();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
-  // ── Template ──────────────────────────────────────────────────────
   const handleTemplateSelect = (tpl) => {
     setSelectedTemplate(tpl.id);
     setFormData((prev) => ({
       ...prev,
       content:      tpl.content,
-      mood:         tpl.defaultMood || prev.mood,
+      mood:         tpl.defaultMood  || prev.mood,
       title:        tpl.defaultTitle !== undefined ? tpl.defaultTitle : prev.title,
       templateUsed: tpl.id,
     }));
@@ -77,46 +78,28 @@ function AddEntry() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // ── Voice recording ───────────────────────────────────────────────
   const startRecording = () => {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
-    const r        = new SR();
-    r.lang         = "en-IN";
-    r.continuous   = true;
-    r.interimResults = false;
+    const r = new SR();
+    r.lang = "en-IN"; r.continuous = true; r.interimResults = false;
     r.onstart  = () => setIsRecording(true);
     r.onend    = () => setIsRecording(false);
-    r.onerror  = (ev) => {
-      console.error("Speech error:", ev.error);
-      setIsRecording(false);
-      toast.error("Voice recognition failed. Please try again.");
-    };
+    r.onerror  = (ev) => { console.error("Speech error:", ev.error); setIsRecording(false); toast.error("Voice recognition failed."); };
     r.onresult = (ev) => {
-      const transcript = Array.from(ev.results)
-        .map((res) => res[0].transcript)
-        .join(" ");
-      // Append transcribed text to the existing plain-text content.
-      // If content is HTML (from template) we append as a new paragraph.
+      const transcript = Array.from(ev.results).map((res) => res[0].transcript).join(" ");
       setFormData((prev) => ({
         ...prev,
-        content: prev.content
-          ? `${prev.content}<p>${transcript}</p>`
-          : transcript,
+        content: prev.content ? `${prev.content}<p>${transcript}</p>` : transcript,
       }));
     };
     recognitionRef.current = r;
     r.start();
   };
 
-  const stopRecording = () => {
-    recognitionRef.current?.stop();
-    setIsRecording(false);
-  };
-
+  const stopRecording  = () => { recognitionRef.current?.stop(); setIsRecording(false); };
   const toggleRecording = () => (isRecording ? stopRecording() : startRecording());
 
-  // ── AI mood detection ─────────────────────────────────────────────
   const handleAnalyzeMood = async () => {
     const plain = formData.content.replace(/<[^>]+>/g, " ").trim();
     if (!plain) { toast.warning("Write something first before detecting mood!"); return; }
@@ -129,17 +112,16 @@ function AddEntry() {
     }
   };
 
-  // ── Submit ────────────────────────────────────────────────────────
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!dataKey) {
+    if (!encKey) {
       toast.error("Session expired. Please log out and log in again to save entries.");
       return;
     }
     const plainText = formData.content.replace(/<[^>]+>/g, " ").trim();
     if (!plainText) { toast.warning("Entry content cannot be empty."); return; }
     try {
-      const encryptedContent = encryptText(formData.content, dataKey);
+      const encryptedContent = encryptText(formData.content, encKey);
       const response = await addEntry({
         ...formData,
         content:       encryptedContent,
@@ -164,25 +146,16 @@ function AddEntry() {
       </button>
 
       <ModalLayout isOpen={open} close={() => setOpen(false)} wide>
-        {/* Mood-themed gradient header area */}
         <div className={`card-body bg-gradient-to-b ${moodTheme} transition-all duration-500`}>
-
-          {/* ── Header row ──────────────────────────────────────── */}
           <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
             <h2 className="card-title text-lg">New Entry</h2>
             <div className="flex gap-2 flex-wrap">
-              {/* Template picker */}
               <EntryTemplates onSelect={handleTemplateSelect} selected={selectedTemplate} />
-
-              {/* Voice button — only shown in supported browsers */}
               {voiceSupported && (
                 <button
-                  type="button"
-                  onClick={toggleRecording}
+                  type="button" onClick={toggleRecording}
                   title={isRecording ? "Stop voice recording" : "Start voice-to-text"}
-                  className={`btn btn-xs rounded-lg gap-1.5 ${
-                    isRecording ? "btn-error animate-pulse" : "btn-outline btn-error"
-                  }`}
+                  className={`btn btn-xs rounded-lg gap-1.5 ${isRecording ? "btn-error animate-pulse" : "btn-outline btn-error"}`}
                 >
                   {isRecording
                     ? <><FaMicrophoneSlash className="text-[10px]" /> Stop</>
@@ -194,14 +167,12 @@ function AddEntry() {
           </div>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-            {/* Title */}
             <input
               type="text" name="title" value={formData.title} onChange={handleChange}
               className="input w-full rounded-xl" required maxLength={20}
               placeholder="Give your entry a title"
             />
 
-            {/* Date + Mood */}
             <div className="flex gap-3 flex-wrap">
               <input
                 type="date" name="date" value={formData.date} onChange={handleChange}
@@ -212,7 +183,6 @@ function AddEntry() {
               </select>
             </div>
 
-            {/* Rich text editor */}
             <div>
               <div className="flex justify-between items-center mb-1.5">
                 <label className="text-sm font-medium">
@@ -233,7 +203,6 @@ function AddEntry() {
               />
             </div>
 
-            {/* Tags */}
             <div>
               <label className="text-sm font-medium block mb-1.5">Tags</label>
               <TagInput
@@ -252,4 +221,5 @@ function AddEntry() {
     </>
   );
 }
+
 export default AddEntry;

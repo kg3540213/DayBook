@@ -1,3 +1,7 @@
+// frontend/src/components/entry/EditEntry.jsx
+//
+// Option A change: useSelector reads state.user.encKey (was state.user.dataKey)
+
 import ModalLayout from "../ModalLayout";
 import { FaPencilAlt, FaThumbtack } from "react-icons/fa";
 import { useEffect, useState } from "react";
@@ -22,23 +26,21 @@ const MOODS = [
 const EditEntry = ({ id }) => {
   const [open, setOpen] = useState(false);
 
-  // BUG FIX: was referencing undefined `userPassword` — use dataKey from Redux
-  const dataKey = useSelector((s) => s.user.dataKey);
+  // Option A: read encKey (was dataKey)
+  const encKey = useSelector((s) => s.user.encKey);
 
-  const { data: getEntry, isLoading: entryLoading } = useGetEntryQuery(id, { skip: !open });
-  const [updateEntry, { isLoading: entryUpdating }] = useUpdateEntryMutation();
-  const { data: allEntriesData } = useGetEntriesQuery();
+  const { data: getEntry, isLoading: entryLoading }  = useGetEntryQuery(id, { skip: !open });
+  const [updateEntry, { isLoading: entryUpdating }]  = useUpdateEntryMutation();
+  const { data: allEntriesData }                     = useGetEntriesQuery();
 
   const isLoading = entryLoading || entryUpdating;
 
-  // Tag suggestions derived from all cached entries — no extra endpoint
   const existingTags = [...new Set(
     (allEntriesData?.data ?? []).flatMap((e) => e.tags ?? [])
   )];
 
   const [formData, setFormData] = useState({
-    title: "", mood: "", content: "", date: "",
-    tags: [], isPinned: false,
+    title: "", mood: "", content: "", date: "", tags: [], isPinned: false,
   });
 
   const handleChange = (e) => {
@@ -46,21 +48,15 @@ const EditEntry = ({ id }) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  // Populate form when entry loads
+  // Populate form when entry data loads
   useEffect(() => {
     if (!getEntry) return;
     const entry = getEntry.data;
     let decryptedContent = entry?.content || "";
 
-    // BUG FIX: was `userPassword` — now correctly uses `dataKey`
-    if (dataKey && decryptedContent) {
-      try {
-        const result = decryptText(decryptedContent, dataKey);
-        // Only use result if it's non-empty; fall back to raw for legacy plain entries
-        decryptedContent = result || decryptedContent;
-      } catch {
-        // Leave raw — old unencrypted entry or decryption mismatch
-      }
+    if (encKey && decryptedContent) {
+      const result = decryptText(decryptedContent, encKey);
+      decryptedContent = result || decryptedContent;
     }
 
     setFormData({
@@ -71,7 +67,7 @@ const EditEntry = ({ id }) => {
       tags:     entry?.tags     || [],
       isPinned: entry?.isPinned || false,
     });
-  }, [getEntry, dataKey]);
+  }, [getEntry, encKey]);
 
   // Reset form on close
   useEffect(() => {
@@ -82,14 +78,14 @@ const EditEntry = ({ id }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!dataKey) {
+    if (!encKey) {
       toast.error("Session expired. Please log out and log in again to edit entries.");
       return;
     }
     const plainText = formData.content.replace(/<[^>]+>/g, " ").trim();
     if (!plainText) { toast.warning("Entry content cannot be empty."); return; }
     try {
-      const encryptedContent = encryptText(formData.content, dataKey);
+      const encryptedContent = encryptText(formData.content, encKey);
       const response = await updateEntry({
         id,
         data: {
@@ -113,16 +109,13 @@ const EditEntry = ({ id }) => {
 
       <ModalLayout isOpen={open} close={() => setOpen(false)} wide>
         <div className="card-body">
-          {/* Header with inline pin toggle */}
           <div className="flex items-center justify-between mb-1">
             <h2 className="card-title text-lg">Edit Entry</h2>
             <button
               type="button"
               onClick={() => setFormData((p) => ({ ...p, isPinned: !p.isPinned }))}
               title={formData.isPinned ? "Unpin this entry" : "Pin this entry"}
-              className={`btn btn-xs gap-1.5 rounded-lg ${
-                formData.isPinned ? "btn-warning" : "btn-ghost text-base-content/35"
-              }`}
+              className={`btn btn-xs gap-1.5 rounded-lg ${formData.isPinned ? "btn-warning" : "btn-ghost text-base-content/35"}`}
             >
               <FaThumbtack className={`text-[11px] transition-transform ${formData.isPinned ? "rotate-0" : "rotate-45"}`} />
               {formData.isPinned ? "Pinned" : "Pin"}
@@ -130,13 +123,11 @@ const EditEntry = ({ id }) => {
           </div>
 
           <form onSubmit={handleSubmit} className="flex flex-col gap-3">
-            {/* Title */}
             <input
               type="text" name="title" value={formData.title} onChange={handleChange}
               className="input w-full rounded-xl" required maxLength={20} placeholder="Entry title"
             />
 
-            {/* Date + Mood */}
             <div className="flex gap-3 flex-wrap">
               <input type="date" name="date" value={formData.date} onChange={handleChange} className="input flex-1 rounded-xl" />
               <select name="mood" value={formData.mood} onChange={handleChange} className="select rounded-xl">
@@ -144,7 +135,6 @@ const EditEntry = ({ id }) => {
               </select>
             </div>
 
-            {/* Rich text editor — only mount once entry data has loaded */}
             <div>
               <label className="text-sm font-medium block mb-1.5">Content</label>
               {!entryLoading && (
@@ -157,7 +147,6 @@ const EditEntry = ({ id }) => {
               )}
             </div>
 
-            {/* Tags */}
             <div>
               <label className="text-sm font-medium block mb-1.5">Tags</label>
               <TagInput

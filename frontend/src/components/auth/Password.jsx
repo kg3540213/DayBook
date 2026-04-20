@@ -1,14 +1,21 @@
 // frontend/src/components/auth/Password.jsx
+//
+// Option A changes:
+//   - After successful password change: derive the new AES key from newPassword,
+//     update sessionStorage and Redux state immediately
+//   - User does NOT need to log out and back in
+//   - Old entries encrypted with the old key will be unreadable with the new key
+//     (this is the accepted tradeoff of Option A — documented in the warning below)
+
 import { useEffect, useState } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { useChangePasswordMutation } from "../../redux/api/usersApiSlice";
-import { setUserDataKey } from "../../redux/features/userSlice";
-import { decryptDataKey } from "../../utils/crypto";
-import { savePasswordToSession } from "../../utils/sessionPassword";
+import { setEncKey } from "../../redux/features/userSlice";
+import { deriveAndStoreKey, clearKeyFromSession } from "../../utils/crypto";
 import { toast } from "react-toastify";
 
 const Password = ({ close }) => {
-  const user    = useSelector((state) => state.user.data);
+  const user     = useSelector((state) => state.user.data);
   const dispatch = useDispatch();
 
   const [email,       setEmail]       = useState("");
@@ -18,11 +25,12 @@ const Password = ({ close }) => {
 
   useEffect(() => {
     if (user) {
-      setEmail(user?.data?.email);
-      setFirstName(user?.data?.firstName);
+      setEmail(user?.data?.email     || "");
+      setFirstName(user?.data?.firstName || "");
     }
   }, [user]);
 
+  // Reset fields when modal is closed
   useEffect(() => {
     setOldPassword("");
     setNewPassword("");
@@ -35,43 +43,17 @@ const Password = ({ close }) => {
     try {
       const response = await changePassword({ oldPassword, newPassword }).unwrap();
 
-      // ── KEY FIX ───────────────────────────────────────────────────────────────
-      // The backend re-wraps the encryptedDataKey under the new password and
-      // returns the updated encryptedDataKey in the response.
-      //
-      // We must do two things here so that after a refresh the dataKey can still
-      // be restored:
-      //
-      // 1. Re-decrypt the new encryptedDataKey using the new password → get the
-      //    raw dataKey (it hasn't changed — only its wrapper has).
-      // 2. Save the new password to sessionStorage so Layout.jsx can do the same
-      //    unwrap on the next page reload.
-      //
-      // Without this, sessionStorage still holds the OLD password, decryptDataKey
-      // throws on reload, dataKey stays null, and all entries look encrypted.
-      // ─────────────────────────────────────────────────────────────────────────
-      const newEncryptedDataKey = response?.encryptedDataKey;
-      if (newEncryptedDataKey) {
-        try {
-          const dataKey = decryptDataKey(newEncryptedDataKey, newPassword);
-          dispatch(setUserDataKey(dataKey));
-          savePasswordToSession(newPassword);
-        } catch (keyErr) {
-          // Non-fatal: the password change itself succeeded.
-          // The user will just need to log out and back in to restore decryption.
-          console.warn("[Password] Could not re-derive dataKey after password change:", keyErr.message);
-          toast.warning("Password changed. Please log out and log in again to keep reading your entries.");
-        }
-      } else {
-        // Server didn't return the new encryptedDataKey — update session password
-        // anyway so the next reload uses the right password for decryption.
-        savePasswordToSession(newPassword);
-      }
+      // Clear the old session key
+      clearKeyFromSession();
+
+      // Derive a new key from the new password and persist to sessionStorage
+      const newEncKey = deriveAndStoreKey(newPassword);
+      dispatch(setEncKey(newEncKey));
 
       toast.success(response?.message);
       close();
     } catch (error) {
-      toast.error(error?.data?.message);
+      toast.error(error?.data?.message || "Password change failed.");
     }
   };
 
@@ -82,16 +64,26 @@ const Password = ({ close }) => {
       </h2>
 
       <p className="text-center text-error">{email}</p>
+
+      {/* Option A warning: password change = key change */}
+      <div className="alert alert-warning rounded-xl text-xs py-2 my-2">
+        <span>⚠️</span>
+        <span>
+          <strong>Note:</strong> Changing your password updates your encryption key.
+          Entries written with your old password will no longer be readable.
+          New entries will be encrypted with the new password.
+        </span>
+      </div>
+
       <div className="text-center my-3">
         <p>
-          Hello {firstName}, for security reasons, you must confirm your old
-          password before setting a new one. Please enter your current password
-          below to proceed with updating your account credentials. Thank you!
+          Hello {firstName}, please enter your current password to confirm before
+          setting a new one.
         </p>
       </div>
 
       <form onSubmit={handleSubmit}>
-        <div className="flex gap-5 justify-center items-center">
+        <div className="flex gap-5 justify-center items-center flex-wrap">
           <div>
             <label htmlFor="oldPassword">
               Old Password <span className="text-red-500">*</span>
@@ -104,6 +96,7 @@ const Password = ({ close }) => {
               onChange={(e) => setOldPassword(e.target.value)}
               className="input rounded-lg my-3"
               placeholder="Current password"
+              required
             />
           </div>
 
@@ -119,6 +112,7 @@ const Password = ({ close }) => {
               onChange={(e) => setNewPassword(e.target.value)}
               className="input rounded-lg my-3"
               placeholder="New password"
+              required
             />
           </div>
         </div>

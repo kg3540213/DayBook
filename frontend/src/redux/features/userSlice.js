@@ -1,8 +1,16 @@
+// frontend/src/redux/features/userSlice.js
+//
+// Option A changes:
+//   - `dataKey`    → `encKey`   (the derived AES key stored as base64)
+//   - `encryptedDataKey` removed from user data shape (backend no longer sends it)
+//   - New action `setEncKey` replaces `setUserDataKey`
+//   - `removeUserInfo` clears encKey along with everything else
+
 import { createSlice } from "@reduxjs/toolkit";
 
 const initialState = {
-  data: null,           // full user object after verified login/signup
-  dataKey: null,        // raw dataKey (base64) in-memory for encrypt/decrypt
+  data:         null,   // full user object (from login / profile query)
+  encKey:       null,   // base64-encoded AES-256 key, in memory only
   pendingEmail: null,   // email held between signup → OTP verification step
 };
 
@@ -13,26 +21,29 @@ const userSlice = createSlice({
     userInfo: (state, action) => {
       state.data = action.payload;
     },
-    setUserDataKey: (state, action) => {
-      state.dataKey = action.payload;
+
+    setEncKey: (state, action) => {
+      state.encKey = action.payload;
     },
+
     setPendingEmail: (state, action) => {
       state.pendingEmail = action.payload;
     },
+
     removeUserInfo: (state) => {
-      state.data    = null;
-      state.dataKey = null;
+      state.data         = null;
+      state.encKey       = null;
       state.pendingEmail = null;
     },
-    // Safely update profile photo regardless of nested state shape
+
+    // Update profile photo safely regardless of nested shape
     setProfilePhoto: (state, action) => {
       if (!state.data) return;
-      // Shape after login/verifyOtp: { message, data: { _id, firstName, ... } }
-      // Shape after profile query:   { message, data: { email, firstName, profilePhoto, ... } }
       if (state.data.data) {
         state.data.data.profilePhoto = action.payload;
       }
     },
+
     // Update name fields safely
     setProfileName: (state, action) => {
       if (!state.data) return;
@@ -47,7 +58,7 @@ const userSlice = createSlice({
 
 export const {
   userInfo,
-  setUserDataKey,
+  setEncKey,
   setPendingEmail,
   removeUserInfo,
   setProfilePhoto,

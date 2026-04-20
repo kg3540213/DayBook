@@ -1,24 +1,28 @@
+// frontend/src/components/auth/Logout.jsx
+//
+// Option A change: clear sessionStorage key (clearKeyFromSession) on logout
+
 import { useLogoutMutation } from "../../redux/api/usersApiSlice";
 import { useDispatch } from "react-redux";
 import { removeUserInfo } from "../../redux/features/userSlice";
-import { clearPasswordFromSession } from "../../utils/sessionPassword";
+import { clearKeyFromSession } from "../../utils/crypto";
 import { useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 
 const Logout = ({ close }) => {
   const [logout, { isLoading }] = useLogoutMutation();
-  const dispatch = useDispatch();
-  const navigate = useNavigate();
+  const dispatch  = useDispatch();
+  const navigate  = useNavigate();
 
   const handleLogout = async () => {
     try {
       const response = await logout().unwrap();
 
-      // Clear Redux state (including dataKey)
+      // Clear Redux state (removes encKey among everything else)
       dispatch(removeUserInfo());
 
-      // Clear persisted password from sessionStorage
-      clearPasswordFromSession();
+      // Clear the AES key from sessionStorage
+      clearKeyFromSession();
 
       navigate("/");
       close();
@@ -47,4 +51,5 @@ const Logout = ({ close }) => {
     </div>
   );
 };
+
 export default Logout;

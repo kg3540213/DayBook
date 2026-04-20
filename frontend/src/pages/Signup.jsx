@@ -1,8 +1,9 @@
 // frontend/src/pages/Signup.jsx
-// Fix: after successful OTP verification, navigate to ?redirect= URL
-// if one exists (e.g. the invite page), otherwise fall back to "/"
-// Also: Login link preserves the redirect param so the user can
-// switch between login/signup without losing the invite URL.
+//
+// Option A changes:
+//   - No encryptedDataKey / decryptDataKey
+//   - After OTP verification: derive AES key from password, store in sessionStorage,
+//     dispatch setEncKey
 
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
@@ -13,13 +14,8 @@ import {
   useVerifyOtpMutation,
   useResendOtpMutation,
 } from "../redux/api/usersApiSlice";
-import {
-  userInfo,
-  setUserDataKey,
-  setPendingEmail,
-} from "../redux/features/userSlice";
-import { decryptDataKey } from "../utils/crypto";
-import { savePasswordToSession } from "../utils/sessionPassword";
+import { userInfo, setEncKey, setPendingEmail } from "../redux/features/userSlice";
+import { deriveAndStoreKey } from "../utils/crypto";
 
 // ── OTP input — 6 individual digit boxes ─────────────────────────
 const OtpInput = ({ otp, setOtp }) => {
@@ -73,31 +69,28 @@ const OtpInput = ({ otp, setOtp }) => {
   );
 };
 
-// ── Main component ────────────────────────────────────────────────
+// ── Main ──────────────────────────────────────────────────────────
 const Signup = () => {
   const user         = useSelector((state) => state.user.data);
   const pendingEmail = useSelector((state) => state.user.pendingEmail);
   const dispatch     = useDispatch();
   const navigate     = useNavigate();
-
-  // ── FIX: read ?redirect= so we can bounce back after signup ──
   const [searchParams] = useSearchParams();
-  const redirectTo = searchParams.get("redirect") || "/";
+  const redirectTo   = searchParams.get("redirect") || "/";
 
   const [step, setStep] = useState(pendingEmail ? "otp" : "form");
 
   const [formData, setFormData] = useState({
-    firstName: "",
-    lastName:  "",
-    email:     "",
-    password:  "",
+    firstName: "", lastName: "", email: "", password: "",
   });
 
-  const [passwordForEncryption, setPasswordForEncryption] = useState("");
-  const [otp, setOtp] = useState("");
-  const [emailError, setEmailError] = useState("");
+  // We hold the password in a ref so it's available in handleVerifyOtp
+  // even after the form fields are cleared on OTP step.
+  const passwordRef = useRef("");
 
-  const [countdown, setCountdown] = useState(0);
+  const [otp,        setOtp]        = useState("");
+  const [emailError, setEmailError] = useState("");
+  const [countdown,  setCountdown]  = useState(0);
   const timerRef = useRef(null);
 
   const [signup,    { isLoading: signingUp }] = useSignupMutation();
@@ -123,34 +116,27 @@ const Signup = () => {
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
-    
-    // Validate email format if field being changed is email
     if (name === "email") {
-      const email = value.trim().toLowerCase();
-      if (email && !email.endsWith("@lpu.in")) {
-        setEmailError("Only LPU emails (e.g., avikgh12@lpu.in) are allowed");
-      } else {
-        setEmailError("");
-      }
+      const em = value.trim().toLowerCase();
+      setEmailError(em && !em.endsWith("@lpu.in")
+        ? "Only LPU emails (e.g., avikgh12@lpu.in) are allowed"
+        : "");
     }
   };
 
-  // ── Step 1: Signup form submit ─────────────────────────────────
+  // ── Step 1: Signup form ────────────────────────────────────────
   const handleSignup = async (e) => {
     e.preventDefault();
-    
-    // Validate email before submission
     const email = formData.email.trim().toLowerCase();
     if (!email.endsWith("@lpu.in")) {
-      toast.error("Only LPU emails (e.g., avikgh12@lpu.in) are allowed");
       setEmailError("Only LPU emails (e.g., avikgh12@lpu.in) are allowed");
       return;
     }
-    
     try {
       const response = await signup(formData).unwrap();
+      // Save password so we can derive the key after OTP verification
+      passwordRef.current = formData.password;
       dispatch(setPendingEmail(formData.email));
-      setPasswordForEncryption(formData.password);
       setStep("otp");
       startCountdown(60);
       toast.success(response.message);
@@ -159,7 +145,7 @@ const Signup = () => {
     }
   };
 
-  // ── Step 2: OTP verify submit ──────────────────────────────────
+  // ── Step 2: OTP verify ─────────────────────────────────────────
   const handleVerifyOtp = async (e) => {
     e.preventDefault();
     if (otp.length !== 6) {
@@ -170,27 +156,13 @@ const Signup = () => {
       const email    = pendingEmail || formData.email;
       const response = await verifyOtp({ email, otp }).unwrap();
 
+      // Derive AES key from password and persist to sessionStorage
+      const encKey = deriveAndStoreKey(passwordRef.current);
+
       dispatch(userInfo(response));
-
-      const encryptedDataKey = response.data.encryptedDataKey;
-      if (!encryptedDataKey) {
-        toast.error("Missing encrypted data key from server. Cannot decrypt entries.");
-        return;
-      }
-
-      let dataKey;
-      try {
-        dataKey = decryptDataKey(encryptedDataKey, passwordForEncryption);
-      } catch (err) {
-        toast.error("Unable to decrypt your data key after signup. Please try again.");
-        return;
-      }
-
-      dispatch(setUserDataKey(dataKey));
-      savePasswordToSession(passwordForEncryption);
+      dispatch(setEncKey(encKey));
       dispatch(setPendingEmail(null));
 
-      // ── FIX: go to the invite page (or wherever redirect points) ──
       navigate(redirectTo, { replace: true });
       toast.success(response.message);
     } catch (error) {
@@ -215,191 +187,165 @@ const Signup = () => {
     }
   };
 
-  // ── Build login href — preserve redirect so switching to login
-  //    doesn't drop the invite URL ────────────────────────────────
   const loginHref = redirectTo && redirectTo !== "/"
     ? `/login?redirect=${encodeURIComponent(redirectTo)}`
     : "/login";
 
-  // ── Render ─────────────────────────────────────────────────────
-  return (
-    <div className="min-h-[calc(100svh-64px-52px-40px)]">
+  // ── Render: Step 1 ─────────────────────────────────────────────
+  if (step === "form") {
+    return (
+      <div className="min-h-[calc(100svh-64px-52px-40px)]">
+        <div className="my-10 text-center">
+          <p className="text-lg font-semibold">Create your DayBook account</p>
+          <p className="text-lg font-semibold">and stay organized effortlessly.</p>
+        </div>
 
-      {/* ── Step 1: Signup form ─────────────────────────────────── */}
-      {step === "form" && (
-        <>
-          <div className="my-10 text-center">
-            <p className="text-lg font-semibold">Create your DayBook account</p>
-            <p className="text-lg font-semibold">and stay organized effortlessly.</p>
-          </div>
-
-          <div className="flex justify-center px-7 my-10">
-            <div className="card card-xl bg-base-200 w-full max-w-sm rounded-2xl shadow-xl hover:shadow-2xl">
-              <div className="card-body">
-                <h2 className="card-title block text-center text-lg mb-2">
-                  Sign up to DayBook
-                </h2>
-
-                {/* Show hint if user arrived from an invite link */}
-                {redirectTo.includes("invite") && (
-                  <div className="alert alert-info rounded-xl text-xs py-2 mb-2">
-                    <span>📩</span>
-                    <span>Create an account to accept your journal invite.</span>
-                  </div>
-                )}
-
-                <form onSubmit={handleSignup}>
-                  <div className="text-sm">
-                    <div>
-                      <label htmlFor="firstName">
-                        First Name <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        id="firstName"
-                        type="text"
-                        name="firstName"
-                        className="input w-full rounded-lg my-3"
-                        placeholder="Enter your first name"
-                        value={formData.firstName}
-                        onChange={handleChange}
-                        required
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="lastName">Last Name</label>
-                      <input
-                        id="lastName"
-                        type="text"
-                        name="lastName"
-                        className="input w-full rounded-lg my-3"
-                        placeholder="Optional"
-                        value={formData.lastName}
-                        onChange={handleChange}
-                      />
-                    </div>
-
-                    <div>
-                      <label htmlFor="email">
-                        Email <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        id="email"
-                        type="email"
-                        name="email"
-                        className={`input w-full rounded-lg my-3 ${emailError ? 'input-error' : ''}`}
-                        placeholder="avikgh12@lpu.in"
-                        value={formData.email}
-                        onChange={handleChange}
-                        required
-                        autoComplete="on"
-                      />
-                      {emailError && (
-                        <p className="text-error text-sm mt-1">{emailError}</p>
-                      )}
-                    </div>
-
-                    <div>
-                      <label htmlFor="password">
-                        Password <span className="text-red-500">*</span>
-                      </label>
-                      <input
-                        id="password"
-                        type="password"
-                        name="password"
-                        className="input w-full rounded-lg my-3"
-                        placeholder="Password"
-                        value={formData.password}
-                        onChange={handleChange}
-                        required
-                      />
-                    </div>
-
-                    <button
-                      type="submit"
-                      className="btn btn-primary w-full rounded-lg my-3"
-                      disabled={signingUp || emailError}
-                    >
-                      {signingUp ? "Sending code..." : "Create Account"}
-                    </button>
-                  </div>
-                </form>
-
-                <div className="text-center text-sm">
-                  Already have an account?{" "}
-                  {/* FIX: preserve redirect on the login link */}
-                  <Link to={loginHref} className="text-red-500 hover:font-bold">
-                    Log in
-                  </Link>
-                </div>
-              </div>
-            </div>
-          </div>
-        </>
-      )}
-
-      {/* ── Step 2: OTP verification ────────────────────────────── */}
-      {step === "otp" && (
-        <div className="flex justify-center px-7 my-16">
+        <div className="flex justify-center px-7 my-10">
           <div className="card card-xl bg-base-200 w-full max-w-sm rounded-2xl shadow-xl hover:shadow-2xl">
             <div className="card-body">
-              <h2 className="card-title block text-center text-lg mb-1">
-                Verify your email
+              <h2 className="card-title block text-center text-lg mb-2">
+                Sign up to DayBook
               </h2>
-              <p className="text-center text-sm text-base-content/60 mb-2">
-                We sent a 6-digit code to
-              </p>
-              <p className="text-center font-medium text-primary text-sm mb-4">
-                {pendingEmail || formData.email}
-              </p>
 
-              <form onSubmit={handleVerifyOtp}>
-                <OtpInput otp={otp} setOtp={setOtp} />
+              {redirectTo.includes("invite") && (
+                <div className="alert alert-info rounded-xl text-xs py-2 mb-2">
+                  <span>📩</span>
+                  <span>Create an account to accept your journal invite.</span>
+                </div>
+              )}
 
-                <button
-                  type="submit"
-                  className="btn btn-primary w-full rounded-lg mt-2"
-                  disabled={verifying || otp.length !== 6}
-                >
-                  {verifying ? "Verifying..." : "Verify & Continue"}
-                </button>
+              <form onSubmit={handleSignup}>
+                <div className="text-sm">
+                  <div>
+                    <label htmlFor="firstName">
+                      First Name <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="firstName" type="text" name="firstName"
+                      className="input w-full rounded-lg my-3"
+                      placeholder="Enter your first name"
+                      value={formData.firstName} onChange={handleChange} required
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="lastName">Last Name</label>
+                    <input
+                      id="lastName" type="text" name="lastName"
+                      className="input w-full rounded-lg my-3"
+                      placeholder="Optional"
+                      value={formData.lastName} onChange={handleChange}
+                    />
+                  </div>
+
+                  <div>
+                    <label htmlFor="email">
+                      Email <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="email" type="email" name="email"
+                      className={`input w-full rounded-lg my-3 ${emailError ? "input-error" : ""}`}
+                      placeholder="avikgh12@lpu.in"
+                      value={formData.email} onChange={handleChange}
+                      required autoComplete="on"
+                    />
+                    {emailError && (
+                      <p className="text-error text-sm mt-1">{emailError}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label htmlFor="password">
+                      Password <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      id="password" type="password" name="password"
+                      className="input w-full rounded-lg my-3"
+                      placeholder="Password"
+                      value={formData.password} onChange={handleChange} required
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="btn btn-primary w-full rounded-lg my-3"
+                    disabled={signingUp || !!emailError}
+                  >
+                    {signingUp ? "Sending code..." : "Create Account"}
+                  </button>
+                </div>
               </form>
 
-              <div className="text-center mt-4 text-sm">
-                {countdown > 0 ? (
-                  <p className="text-base-content/50">
-                    Resend code in{" "}
-                    <span className="font-medium text-primary">{countdown}s</span>
-                  </p>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleResend}
-                    disabled={resending}
-                    className="text-primary hover:underline font-medium"
-                  >
-                    {resending ? "Sending..." : "Resend code"}
-                  </button>
-                )}
+              <div className="text-center text-sm">
+                Already have an account?{" "}
+                <Link to={loginHref} className="text-red-500 hover:font-bold">
+                  Log in
+                </Link>
               </div>
-
-              <button
-                type="button"
-                onClick={() => {
-                  setStep("form");
-                  setOtp("");
-                  dispatch(setPendingEmail(null));
-                  clearInterval(timerRef.current);
-                  setCountdown(0);
-                }}
-                className="btn btn-ghost btn-sm w-full mt-2 text-base-content/50"
-              >
-                ← Change email
-              </button>
             </div>
           </div>
         </div>
-      )}
+      </div>
+    );
+  }
+
+  // ── Render: Step 2 ─────────────────────────────────────────────
+  return (
+    <div className="flex justify-center px-7 my-16 min-h-[calc(100svh-64px-52px-40px)]">
+      <div className="card card-xl bg-base-200 w-full max-w-sm rounded-2xl shadow-xl hover:shadow-2xl">
+        <div className="card-body">
+          <h2 className="card-title block text-center text-lg mb-1">
+            Verify your email
+          </h2>
+          <p className="text-center text-sm text-base-content/60 mb-2">
+            We sent a 6-digit code to
+          </p>
+          <p className="text-center font-medium text-primary text-sm mb-4">
+            {pendingEmail || formData.email}
+          </p>
+
+          <form onSubmit={handleVerifyOtp}>
+            <OtpInput otp={otp} setOtp={setOtp} />
+            <button
+              type="submit"
+              className="btn btn-primary w-full rounded-lg mt-2"
+              disabled={verifying || otp.length !== 6}
+            >
+              {verifying ? "Verifying..." : "Verify & Continue"}
+            </button>
+          </form>
+
+          <div className="text-center mt-4 text-sm">
+            {countdown > 0 ? (
+              <p className="text-base-content/50">
+                Resend code in{" "}
+                <span className="font-medium text-primary">{countdown}s</span>
+              </p>
+            ) : (
+              <button
+                type="button" onClick={handleResend} disabled={resending}
+                className="text-primary hover:underline font-medium"
+              >
+                {resending ? "Sending..." : "Resend code"}
+              </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              setStep("form");
+              setOtp("");
+              dispatch(setPendingEmail(null));
+              clearInterval(timerRef.current);
+              setCountdown(0);
+            }}
+            className="btn btn-ghost btn-sm w-full mt-2 text-base-content/50"
+          >
+            ← Change email
+          </button>
+        </div>
+      </div>
     </div>
   );
 };

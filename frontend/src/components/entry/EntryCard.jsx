@@ -1,3 +1,7 @@
+// frontend/src/components/entry/EntryCard.jsx
+//
+// Option A change: useSelector reads state.user.encKey (was state.user.dataKey)
+
 import ReadMore from "./ReadMore";
 import EditEntry from "./EditEntry";
 import DeleteEntry from "./DeleteEntry";
@@ -7,32 +11,27 @@ import { FaThumbtack } from "react-icons/fa";
 import { useTogglePinMutation } from "../../redux/api/entriesApiSlice";
 import { toast } from "react-toastify";
 
-// ── Mood → card accent colour ──────────────────────────────────────
 const MOOD_THEME = {
-  "🙂": { border: "border-l-emerald-500/60",  badge: "badge-success" },
-  "😔": { border: "border-l-blue-500/60",     badge: "badge-info"    },
-  "😡": { border: "border-l-rose-500/60",     badge: "badge-error"   },
-  "😐": { border: "border-l-amber-500/60",    badge: "badge-warning" },
+  "🙂": { border: "border-l-emerald-500/60", badge: "badge-success" },
+  "😔": { border: "border-l-blue-500/60",    badge: "badge-info"    },
+  "😡": { border: "border-l-rose-500/60",    badge: "badge-error"   },
+  "😐": { border: "border-l-amber-500/60",   badge: "badge-warning" },
 };
 
-// Strip HTML to plain text for card preview
 const stripHtml = (html) => {
   if (!html) return "";
   return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 };
 
-// Highlight a text fragment
 const HighlightText = ({ text, query }) => {
   if (!query) return <>{text}</>;
   const parts = text.split(new RegExp(`(${query})`, "gi"));
   return (
     <>
       {parts.map((part, i) =>
-        part.toLowerCase() === query.toLowerCase() ? (
-          <span key={i} className="text-secondary font-medium">{part}</span>
-        ) : (
-          part
-        )
+        part.toLowerCase() === query.toLowerCase()
+          ? <span key={i} className="text-secondary font-medium">{part}</span>
+          : part
       )}
     </>
   );
@@ -43,17 +42,15 @@ const EntryCard = ({
   highlightText, isPinned: initialPinned, tags = [],
   contentFormat = "plain",
 }) => {
-  const dataKey = useSelector((state) => state.user.dataKey);
-  // togglePin now takes just the id — uses PATCH /entries/:id/pin
+  // Option A: read encKey (was dataKey)
+  const encKey = useSelector((state) => state.user.encKey);
   const [togglePin, { isLoading: pinning }] = useTogglePinMutation();
 
-  // ── Decrypt ──────────────────────────────────────────────────────
+  // Decrypt content using the session key
   let decryptedContent = content;
-  if (dataKey && content) {
-    try {
-      const result = decryptText(content, dataKey);
-      decryptedContent = result || content;
-    } catch { /* leave raw */ }
+  if (encKey && content) {
+    const result = decryptText(content, encKey);
+    decryptedContent = result || content;
   }
 
   const plainContent = stripHtml(decryptedContent);
@@ -91,7 +88,6 @@ const EntryCard = ({
         relative flex flex-col h-full
       `}
     >
-      {/* Pin badge */}
       {initialPinned && (
         <div className="absolute top-3 left-3 z-10">
           <span className="badge badge-warning badge-xs gap-1">
@@ -100,19 +96,14 @@ const EntryCard = ({
         </div>
       )}
 
-      {/* Actions — top right */}
       <div className={`flex justify-between items-start pt-4 px-3 ${initialPinned ? "mt-3" : ""}`}>
         <p className="text-xs text-base-content/50">{formattedDate}</p>
         <div className="flex gap-2 items-center">
           <button
-            type="button"
-            onClick={handleTogglePin}
-            disabled={pinning}
+            type="button" onClick={handleTogglePin} disabled={pinning}
             title={initialPinned ? "Unpin" : "Pin"}
             className={`hover:cursor-pointer transition-all ${
-              initialPinned
-                ? "text-warning"
-                : "text-base-content/25 hover:text-warning"
+              initialPinned ? "text-warning" : "text-base-content/25 hover:text-warning"
             }`}
           >
             <FaThumbtack className={`text-xs ${initialPinned ? "rotate-0" : "rotate-45"}`} />
@@ -122,7 +113,6 @@ const EntryCard = ({
         </div>
       </div>
 
-      {/* Body */}
       <div className="card-body p-4 pt-2 flex-1">
         <h2 className="card-title text-base leading-snug">
           <span className="mr-1">{mood}</span>
@@ -133,7 +123,6 @@ const EntryCard = ({
         </p>
       </div>
 
-      {/* Tags */}
       {tags.length > 0 && (
         <div className="flex flex-wrap gap-1 px-4 pb-2">
           {tags.slice(0, 4).map((tag) => (
@@ -145,7 +134,6 @@ const EntryCard = ({
         </div>
       )}
 
-      {/* Footer */}
       <div className="flex justify-between items-center pb-4 px-3 border-t border-base-content/5 pt-2">
         <p className="text-xs text-base-content/40">Edited: {formattedUpdateAt}</p>
         <ReadMore
@@ -161,4 +149,5 @@ const EntryCard = ({
     </div>
   );
 };
+
 export default EntryCard;

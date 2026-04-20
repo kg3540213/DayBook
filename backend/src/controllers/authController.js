@@ -1,39 +1,25 @@
-const User = require("../models/userModel");
-const bcrypt = require("bcryptjs");
+// backend/src/controllers/authController.js
+//
+// Option A: Password-based encryption — no dataKey, no encryptedDataKey.
+// The server stores only hashed passwords and encrypted entry ciphertext.
+// Key derivation happens 100% client-side from the user's password.
+//
+// Changes from original:
+//   - All encryptDataKey / decryptDataKey helpers removed
+//   - encryptedDataKey removed from User.create / user.save calls
+//   - Login and verifyOtp no longer return encryptedDataKey
+//   - changePassword does NOT need to re-wrap any key;
+//     it clears the session on the client side (handled in Password.jsx)
+
+const User      = require("../models/userModel");
+const bcrypt    = require("bcryptjs");
 const validator = require("validator");
 const generateToken = require("../utils/generateToken");
 const { sendOtpEmail } = require("../services/EmailService");
-const crypto = require("crypto");
+const crypto    = require("crypto");
 
-const generateOtp = () => 
-  crypto.randomInt(100000, 999999).toString();
-
-// ── Data key encryption helpers ───────────────────────────────────
-const deriveKey = (password, salt) =>
-  crypto.pbkdf2Sync(password, salt, 100000, 32, "sha256");
-
-const encryptDataKey = (dataKey, password) => {
-  const salt = crypto.randomBytes(16);
-  const iv   = crypto.randomBytes(16);
-  const key  = deriveKey(password, salt);
-  const cipher = crypto.createCipheriv("aes-256-cbc", key, iv);
-  let encrypted = cipher.update(dataKey, "utf8", "base64");
-  encrypted += cipher.final("base64");
-  return `${salt.toString("base64")}:${iv.toString("base64")}:${encrypted}`;
-};
-
-const decryptDataKey = (encryptedDataKey, password) => {
-  const parts = encryptedDataKey.split(":");
-  if (parts.length !== 3) throw new Error("Invalid encryptedDataKey format");
-  const [saltB64, ivB64, ciphertext] = parts;
-  const salt      = Buffer.from(saltB64, "base64");
-  const iv        = Buffer.from(ivB64, "base64");
-  const key       = deriveKey(password, salt);
-  const decipher  = crypto.createDecipheriv("aes-256-cbc", key, iv);
-  let decrypted   = decipher.update(ciphertext, "base64", "utf8");
-  decrypted      += decipher.final("utf8");
-  return decrypted;
-};
+// ── OTP helper ────────────────────────────────────────────────────
+const generateOtp = () => crypto.randomInt(100000, 999999).toString();
 
 // ── SIGNUP ────────────────────────────────────────────────────────
 const signup = async (req, res) => {
@@ -50,22 +36,18 @@ const signup = async (req, res) => {
       return res.status(422).json({ message: "Invalid email format!" });
 
     if (!email.endsWith("@lpu.in"))
-      return res.status(422).json({ message: "Only LPU emails (e.g., avikgh12@lpu.in) are allowed for signup!" });
+      return res.status(422).json({
+        message: "Only LPU emails (e.g., avikgh12@lpu.in) are allowed for signup!",
+      });
 
-    if (email.length > 100)
-      return res.status(422).json({ message: "Email cannot exceed 100 characters!" });
-    if (firstName.length > 50)
-      return res.status(422).json({ message: "First name cannot exceed 50 characters!" });
-    if (lastName && lastName.length > 50)
-      return res.status(422).json({ message: "Last name cannot exceed 50 characters!" });
-    if (password.length > 100)
-      return res.status(422).json({ message: "Password cannot exceed 100 characters!" });
-    if (
-      !validator.isStrongPassword(password, {
-        minLength: 8, minUppercase: 1, minLowercase: 1,
-        minNumbers: 1, minSymbols: 1,
-      })
-    )
+    if (email.length     > 100) return res.status(422).json({ message: "Email cannot exceed 100 characters!" });
+    if (firstName.length > 50)  return res.status(422).json({ message: "First name cannot exceed 50 characters!" });
+    if (lastName && lastName.length > 50) return res.status(422).json({ message: "Last name cannot exceed 50 characters!" });
+    if (password.length  > 100) return res.status(422).json({ message: "Password cannot exceed 100 characters!" });
+
+    if (!validator.isStrongPassword(password, {
+      minLength: 8, minUppercase: 1, minLowercase: 1, minNumbers: 1, minSymbols: 1,
+    }))
       return res.status(422).json({ message: "Please enter a strong password!" });
 
     const existingUser = await User.findOne({ email });
@@ -74,6 +56,7 @@ const signup = async (req, res) => {
       if (existingUser.isVerified)
         return res.status(422).json({ message: "User already exists!" });
 
+      // Unverified account exists — refresh OTP and password
       const otp     = generateOtp();
       const otpHash = await bcrypt.hash(otp, 10);
       const now     = new Date();
@@ -84,10 +67,6 @@ const signup = async (req, res) => {
       existingUser.otpHash   = otpHash;
       existingUser.otpExpiry = new Date(now.getTime() + 10 * 60 * 1000);
       existingUser.otpSentAt = now;
-
-      const dataKey = crypto.randomBytes(32).toString("base64");
-      existingUser.encryptedDataKey = encryptDataKey(dataKey, password);
-
       await existingUser.save();
 
       try {
@@ -103,12 +82,11 @@ const signup = async (req, res) => {
       });
     }
 
-    const hashedPassword   = await bcrypt.hash(password, 10);
-    const otp              = generateOtp();
-    const otpHash          = await bcrypt.hash(otp, 10);
-    const now              = new Date();
-    const dataKey          = crypto.randomBytes(32).toString("base64");
-    const encryptedDataKey = encryptDataKey(dataKey, password);
+    // Brand-new user
+    const hashedPassword = await bcrypt.hash(password, 10);
+    const otp            = generateOtp();
+    const otpHash        = await bcrypt.hash(otp, 10);
+    const now            = new Date();
 
     await User.create({
       email, firstName, lastName,
@@ -117,7 +95,6 @@ const signup = async (req, res) => {
       otpHash,
       otpExpiry: new Date(now.getTime() + 10 * 60 * 1000),
       otpSentAt: now,
-      encryptedDataKey,
     });
 
     try {
@@ -154,10 +131,8 @@ const verifyOtp = async (req, res) => {
 
     const user = await User.findOne({ email });
 
-    if (!user)
-      return res.status(404).json({ message: "User not found!" });
-    if (user.isVerified)
-      return res.status(400).json({ message: "Email is already verified!" });
+    if (!user)                                     return res.status(404).json({ message: "User not found!" });
+    if (user.isVerified)                           return res.status(400).json({ message: "Email is already verified!" });
     if (!user.otpExpiry || new Date() > user.otpExpiry)
       return res.status(400).json({ message: "OTP has expired! Please request a new one." });
 
@@ -173,14 +148,14 @@ const verifyOtp = async (req, res) => {
 
     generateToken(user._id, res);
 
+    // No encryptedDataKey returned — client derives key from password client-side
     res.status(200).json({
       message: "Email verified successfully! Welcome to DayBook.",
       data: {
-        _id:              user._id,
-        email:            user.email,
-        firstName:        user.firstName,
-        lastName:         user.lastName,
-        encryptedDataKey: user.encryptedDataKey,
+        _id:       user._id,
+        email:     user.email,
+        firstName: user.firstName,
+        lastName:  user.lastName,
       },
     });
   } catch (error) {
@@ -198,13 +173,10 @@ const resendOtp = async (req, res) => {
       return res.status(400).json({ message: "Email is required!" });
 
     email = email.trim().toLowerCase();
-
     const user = await User.findOne({ email });
 
-    if (!user)
-      return res.status(404).json({ message: "User not found!" });
-    if (user.isVerified)
-      return res.status(400).json({ message: "Email is already verified!" });
+    if (!user)         return res.status(404).json({ message: "User not found!" });
+    if (user.isVerified) return res.status(400).json({ message: "Email is already verified!" });
 
     if (user.otpSentAt) {
       const secondsSinceLastSend = (new Date() - new Date(user.otpSentAt)) / 1000;
@@ -233,9 +205,7 @@ const resendOtp = async (req, res) => {
       return res.status(500).json({ message: "Failed to send verification email. Please try again." });
     }
 
-    res.status(200).json({
-      message: "A new verification code has been sent to your email.",
-    });
+    res.status(200).json({ message: "A new verification code has been sent to your email." });
   } catch (error) {
     console.error("Resend OTP error:", error);
     res.status(500).json({ message: "Something went wrong! Please try again later!" });
@@ -251,8 +221,8 @@ const login = async (req, res) => {
       return res.status(400).json({ message: "Email and password are required!" });
 
     const email = rawEmail.trim().toLowerCase();
+    const user  = await User.findOne({ email });
 
-    const user = await User.findOne({ email });
     if (!user)
       return res.status(401).json({ message: "Invalid credentials!" });
 
@@ -268,14 +238,15 @@ const login = async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials!" });
 
     generateToken(user._id, res);
+
+    // No encryptedDataKey — client will derive key from the password it already has
     res.json({
       message: "User logged in successfully!",
       data: {
-        _id:              user._id,
-        firstName:        user.firstName,
-        lastName:         user.lastName,
-        email:            user.email,
-        encryptedDataKey: user.encryptedDataKey,
+        _id:       user._id,
+        firstName: user.firstName,
+        lastName:  user.lastName,
+        email:     user.email,
       },
     });
   } catch (error) {
@@ -291,6 +262,9 @@ const logout = (req, res) => {
 };
 
 // ── CHANGE PASSWORD ───────────────────────────────────────────────
+// Option A: password change = key change.
+// Old entries encrypted with old key become unreadable.
+// We inform the user and clear the session key so they re-login with new password.
 const changePassword = async (req, res) => {
   try {
     const loggedUser = req.user;
@@ -304,40 +278,22 @@ const changePassword = async (req, res) => {
       return res.status(401).json({ message: "Old password is incorrect!" });
 
     if (await bcrypt.compare(newPassword, loggedUser.password))
-      return res.status(422).json({ message: "New password must differ!" });
+      return res.status(422).json({ message: "New password must differ from the old one!" });
 
-    if (
-      !validator.isStrongPassword(newPassword, {
-        minLength: 8, minUppercase: 1, minLowercase: 1,
-        minNumbers: 1, minSymbols: 1,
-      })
-    )
+    if (!validator.isStrongPassword(newPassword, {
+      minLength: 8, minUppercase: 1, minLowercase: 1, minNumbers: 1, minSymbols: 1,
+    }))
       return res.status(422).json({ message: "Please enter a strong password!" });
 
-    // Re-wrap encryptedDataKey under the new password.
-    // The raw dataKey itself never changes — only its password wrapper does.
-    // All existing encrypted entries remain readable after this operation.
-    let newEncryptedDataKey;
-    try {
-      const currentDataKey = decryptDataKey(loggedUser.encryptedDataKey, oldPassword);
-      newEncryptedDataKey  = encryptDataKey(currentDataKey, newPassword);
-    } catch (decryptionError) {
-      console.error("Failed to re-wrap data key:", decryptionError);
-      return res.status(500).json({ message: "Could not update encryption key. Please try again later." });
-    }
-
-    loggedUser.password          = await bcrypt.hash(newPassword, 10);
-    loggedUser.encryptedDataKey  = newEncryptedDataKey;
+    loggedUser.password = await bcrypt.hash(newPassword, 10);
     await loggedUser.save();
 
-    // ── FIX: return the new encryptedDataKey so the frontend can immediately
-    // re-derive the dataKey in memory and update sessionStorage.
-    // Without this, the frontend only learns about the new encryptedDataKey on
-    // the next profile fetch (page refresh), and if sessionStorage still holds
-    // the old password, decryption breaks until the user logs out and back in.
+    // Return success — client is responsible for:
+    //   1. Clearing the old session key (clearKeyFromSession)
+    //   2. Deriving + storing the new session key (deriveAndStoreKey)
+    //   3. Dispatching setEncKey with the new key
     res.status(200).json({
-      message:          "Password changed successfully!",
-      encryptedDataKey: newEncryptedDataKey,
+      message: "Password changed successfully! Your encryption key has been updated.",
     });
   } catch (error) {
     console.error("Change password error:", error);

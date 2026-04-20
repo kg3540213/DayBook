@@ -1,10 +1,11 @@
+// frontend/src/pages/Entries.jsx
+//
+// Option A change: useSelector reads state.user.encKey (was state.user.dataKey)
+
 import { useMemo } from "react";
 import { useSelector } from "react-redux";
 import { Navigate, useSearchParams, useNavigate } from "react-router-dom";
-import {
-  useGetEntriesQuery,
-  useSearchEntryQuery,
-} from "../redux/api/entriesApiSlice";
+import { useGetEntriesQuery } from "../redux/api/entriesApiSlice";
 import EntryCard from "../components/entry/EntryCard";
 import AddEntry from "../components/entry/AddEntry";
 import Loader from "../components/Loader";
@@ -13,7 +14,6 @@ import { FaThumbtack } from "react-icons/fa";
 
 const ENTRIES_PER_PAGE = 6;
 
-// ── Active filter chips ───────────────────────────────────────────
 const ActiveFilters = ({ search, mood, dateFrom, dateTo, tag, pinned, onClear }) => {
   const parts = [];
   if (search)   parts.push(`"${search}"`);
@@ -34,7 +34,6 @@ const ActiveFilters = ({ search, mood, dateFrom, dateTo, tag, pinned, onClear })
   );
 };
 
-// ── Pagination ────────────────────────────────────────────────────
 const Pagination = ({ page, totalPages, totalEntries, onPageChange }) => {
   if (totalPages <= 1) return null;
   const from  = (page - 1) * ENTRIES_PER_PAGE + 1;
@@ -57,33 +56,22 @@ const Pagination = ({ page, totalPages, totalEntries, onPageChange }) => {
       </div>
       <div className="flex gap-1.5 mt-1">
         {Array.from({ length: totalPages }).map((_, i) => (
-          <button key={i} onClick={() => onPageChange(i + 1)} className={`rounded-full transition-all duration-200 ${i + 1 === page ? "w-5 h-2 bg-primary" : "w-2 h-2 bg-base-content/20 hover:bg-base-content/40"}`} />
+          <button key={i} onClick={() => onPageChange(i + 1)}
+            className={`rounded-full transition-all duration-200 ${i + 1 === page ? "w-5 h-2 bg-primary" : "w-2 h-2 bg-base-content/20 hover:bg-base-content/40"}`}
+          />
         ))}
       </div>
     </div>
   );
 };
 
-// ── Helper: try to decrypt, fall back to raw ciphertext ──────────
-const safeDecrypt = (content, dataKey) => {
-  if (!content) return "";
-  if (!dataKey) return content; // no dataKey = return raw (may be unencrypted legacy entry)
-  try {
-    const result = decryptText(content, dataKey);
-    return result || content;
-  } catch {
-    return content; // decryption failed — treat as plain text (legacy entry)
-  }
-};
-
-// ── Helper: strip HTML tags to plain text ─────────────────────────
 const stripHtml = (html) =>
   (html || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 
-// ── Main ──────────────────────────────────────────────────────────
 const Entries = () => {
   const user    = useSelector((s) => s.user.data);
-  const dataKey = useSelector((s) => s.user.dataKey);
+  // Option A: read encKey (was dataKey)
+  const encKey  = useSelector((s) => s.user.encKey);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
@@ -97,55 +85,30 @@ const Entries = () => {
   const pinned     = searchParams.get("pinned") === "true";
   const page       = Math.max(1, parseInt(searchParams.get("page") || "1"));
 
-  const isSearchActive  = !!(searchText || mood || dateFrom || dateTo || tag || pinned);
+  const isSearchActive = !!(searchText || mood || dateFrom || dateTo || tag || pinned);
 
-  // ── Always do client-side filtering from the full entries list ──
-  // We no longer rely on the server search endpoint for the main results
-  // because getEntries now fetches all entries (limit=1000).
-  // The server searchEntry query is kept only as a fallback for very
-  // specific server-side filters (mood + date combined), but the
-  // primary path is always client-side for instant, accurate results.
   const { data: allEntriesData, isLoading } = useGetEntriesQuery();
-
   const allEntries = allEntriesData?.data ?? [];
 
   const popularTags = useMemo(() => {
     const counts = {};
     allEntries.forEach((e) => (e.tags ?? []).forEach((t) => { counts[t] = (counts[t] ?? 0) + 1; }));
-    return Object.entries(counts)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 10)
-      .map(([t]) => t);
+    return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 10).map(([t]) => t);
   }, [allEntries]);
 
-  // ── Client-side filtering (works on ALL entries) ──────────────
   const allFilteredEntries = useMemo(() => {
     if (isLoading) return [];
-
     let base = [...allEntries];
 
-    // 1. Mood filter
-    if (mood) {
-      base = base.filter((e) => e.mood === mood);
-    }
+    if (mood)   base = base.filter((e) => e.mood === mood);
+    if (pinned) base = base.filter((e) => e.isPinned);
+    if (tag)    base = base.filter((e) => (e.tags ?? []).includes(tag));
 
-    // 2. Pinned filter
-    if (pinned) {
-      base = base.filter((e) => e.isPinned);
-    }
-
-    // 3. Tag filter
-    if (tag) {
-      base = base.filter((e) => (e.tags ?? []).includes(tag));
-    }
-
-    // 4. Date range filter
     if (dateFrom || dateTo) {
       const fromMs = dateFrom ? new Date(dateFrom).getTime() : null;
       const toDate = dateTo ? new Date(dateTo) : null;
       if (toDate) toDate.setUTCHours(23, 59, 59, 999);
       const toMs = toDate ? toDate.getTime() : null;
-
       base = base.filter((e) => {
         const entryMs = new Date(e.date).getTime();
         if (fromMs !== null && entryMs < fromMs) return false;
@@ -154,26 +117,22 @@ const Entries = () => {
       });
     }
 
-    // 5. Text search — check title first (fast), then decrypt+search content
     if (searchText.trim()) {
       const needle = searchText.trim().toLowerCase();
       base = base.filter((entry) => {
-        // Always check title — no decryption needed
         if (entry.title.toLowerCase().includes(needle)) return true;
-
-        // Check decrypted content
-        const plainContent = stripHtml(safeDecrypt(entry.content, dataKey));
-        return plainContent.toLowerCase().includes(needle);
+        // Decrypt content to search in plaintext
+        const plain = stripHtml(decryptText(entry.content, encKey));
+        return plain.toLowerCase().includes(needle);
       });
     }
 
-    // 6. Sort: pinned first, then newest date
     return base.sort((a, b) => {
       if (a.isPinned && !b.isPinned) return -1;
       if (!a.isPinned && b.isPinned) return 1;
       return new Date(b.date) - new Date(a.date);
     });
-  }, [isLoading, allEntries, mood, pinned, tag, dateFrom, dateTo, searchText, dataKey]);
+  }, [isLoading, allEntries, mood, pinned, tag, dateFrom, dateTo, searchText, encKey]);
 
   const totalEntries = allFilteredEntries.length;
   const totalPages   = Math.max(1, Math.ceil(totalEntries / ENTRIES_PER_PAGE));
@@ -219,8 +178,8 @@ const Entries = () => {
         ) : (
           <>
             <p className="text-2xl font-semibold mb-2">Welcome, {user.data.firstName}</p>
-            <p className="text-lg mb-2">You haven't added any entries yet.</p>
-            <p className="text-lg">Start your journey by clicking the '+' button below!</p>
+            <p className="text-lg mb-2">You haven&apos;t added any entries yet.</p>
+            <p className="text-lg">Start your journey by clicking the &apos;+&apos; button below!</p>
           </>
         )}
         <div className="fixed bottom-20 right-8 z-10"><AddEntry /></div>
