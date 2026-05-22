@@ -7,6 +7,7 @@ const key = CryptoJS.PBKDF2(password, salt, {
   iterations: 100000,
   hasher: CryptoJS.algo.SHA256,
 });
+
 const plaintext = 'hello world';
 const cipher = CryptoJS.AES.encrypt(plaintext, key, {
   iv,

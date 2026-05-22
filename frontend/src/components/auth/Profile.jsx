@@ -91,10 +91,17 @@ const Profile = ({ close }) => {
     if (!preview) return;
     try {
       const res = await uploadProfilePhoto({ image: preview }).unwrap();
-      // Update only the photo field in Redux — preserves all other user data
-      dispatch(setProfilePhoto(res.profilePhoto));
-      setPreview(null);
-      toast.success(res.message || "Photo updated!");
+      
+      // Verify we got a valid photo URL
+      if (res.profilePhoto) {
+        // Update Redux with the new photo
+        dispatch(setProfilePhoto(res.profilePhoto));
+        setPreview(null);
+        toast.success(res.message || "Photo updated successfully!");
+      } else {
+        console.warn("Upload response missing profilePhoto:", res);
+        toast.error("Photo uploaded but could not be displayed. Please refresh the page.");
+      }
     } catch (err) {
       console.error("Upload error:", err);
       toast.error(err?.data?.message || "Upload failed. Check your internet and try again.");

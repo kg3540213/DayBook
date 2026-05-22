@@ -39,8 +39,13 @@ const userSlice = createSlice({
     // Update profile photo safely regardless of nested shape
     setProfilePhoto: (state, action) => {
       if (!state.data) return;
-      if (state.data.data) {
+      // Handle nested structure (state.data.data.profilePhoto)
+      if (state.data.data && typeof state.data.data === 'object') {
         state.data.data.profilePhoto = action.payload;
+      } 
+      // Handle direct structure (state.data.profilePhoto)
+      else if (typeof state.data === 'object') {
+        state.data.profilePhoto = action.payload;
       }
     },
 
@@ -48,9 +53,15 @@ const userSlice = createSlice({
     setProfileName: (state, action) => {
       if (!state.data) return;
       const { firstName, lastName } = action.payload;
-      if (state.data.data) {
+      // Handle nested structure
+      if (state.data.data && typeof state.data.data === 'object') {
         state.data.data.firstName = firstName;
         state.data.data.lastName  = lastName;
+      } 
+      // Handle direct structure
+      else if (typeof state.data === 'object') {
+        state.data.firstName = firstName;
+        state.data.lastName  = lastName;
       }
     },
   },

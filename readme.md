@@ -1,9 +1,5 @@
 # 📓 DayBook
 
-[![License: ISC](https://img.shields.io/badge/License-ISC-blue.svg)](https://opensource.org/licenses/ISC)
-[![Node.js Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org/)
-[![React Version](https://img.shields.io/badge/react-19.0.0-blue)](https://reactjs.org/)
-
 A **secure, private journaling platform** exclusively for **LPU (Lovely Professional University)** students. Write freely, express yourself — every entry is **AES-256 encrypted client-side** before it ever reaches the server. Even the developer cannot read your entries.
 
 **Live Demo:** [https://lpudaybook.onrender.com](https://lpudaybook.onrender.com)
