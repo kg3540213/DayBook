@@ -126,7 +126,9 @@ const EntryCard = ({
       {tags.length > 0 && (
         <div className="flex flex-wrap gap-1 px-4 pb-2">
           {tags.slice(0, 4).map((tag) => (
-            <span key={tag} className="badge badge-xs badge-ghost">#{tag}</span>
+            <span key={tag} className="badge badge-xs badge-ghost">
+              #<HighlightText text={tag} query={highlightText} />
+            </span>
           ))}
           {tags.length > 4 && (
             <span className="badge badge-xs badge-ghost">+{tags.length - 4}</span>

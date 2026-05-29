@@ -118,6 +118,29 @@ const entriesApiSlice = apiSlice.injectEndpoints({
       query: () => "/entries/analytics/streak",
       providesTags: ["Entries"],
     }),
+
+    // Saved Searches / Smart Folders
+    getSavedSearches: builder.query({
+      query: () => "/entries/saved-searches",
+      providesTags: ["SavedSearches"],
+    }),
+
+    saveSavedSearch: builder.mutation({
+      query: (data) => ({
+        url: "/entries/saved-searches",
+        method: "POST",
+        body: data,
+      }),
+      invalidatesTags: ["SavedSearches"],
+    }),
+
+    deleteSavedSearch: builder.mutation({
+      query: (id) => ({
+        url: `/entries/saved-searches/${id}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: ["SavedSearches"],
+    }),
   }),
 });
 
@@ -137,4 +160,7 @@ export const {
   useGetEntriesPerWeekQuery,
   useGetEntriesPerMonthQuery,
   useGetWritingStreakQuery,
+  useGetSavedSearchesQuery,
+  useSaveSavedSearchMutation,
+  useDeleteSavedSearchMutation,
 } = entriesApiSlice;

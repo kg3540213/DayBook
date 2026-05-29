@@ -27,6 +27,7 @@ const Profile = ({ close }) => {
   const userData = user?.data ?? {};
   const currentPhoto = userData.profilePhoto ?? null;
 
+  const [activeTab, setActiveTab] = useState("info");
   const [firstName,  setFirstName]  = useState("");
   const [lastName,   setLastName]   = useState("");
   const [preview,    setPreview]    = useState(null);
@@ -92,9 +93,7 @@ const Profile = ({ close }) => {
     try {
       const res = await uploadProfilePhoto({ image: preview }).unwrap();
       
-      // Verify we got a valid photo URL
       if (res.profilePhoto) {
-        // Update Redux with the new photo
         dispatch(setProfilePhoto(res.profilePhoto));
         setPreview(null);
         toast.success(res.message || "Photo updated successfully!");
@@ -124,7 +123,6 @@ const Profile = ({ close }) => {
     e.preventDefault();
     try {
       const res = await updateProfile({ firstName, lastName }).unwrap();
-      // Update only name fields in Redux
       dispatch(setProfileName({ firstName, lastName }));
       toast.success(res.message || "Profile saved.");
       close();
@@ -136,141 +134,158 @@ const Profile = ({ close }) => {
   const isProcessing = uploading || deleting || saving;
 
   return (
-    <div className="card-body p-5">
-      <h2 className="card-title block text-center text-lg mb-4 font-bold">
-        Profile Information
-      </h2>
-
-      {/* ── Photo area ─────────────────────────────────────────── */}
-      <div className="flex flex-col items-center gap-3 mb-4">
-        <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-          {preview || currentPhoto ? (
-            <img
-              src={preview ?? currentPhoto}
-              alt="Profile"
-              className="w-24 h-24 rounded-full object-cover border-2 border-primary shadow-lg"
-            />
-          ) : (
-            <DefaultAvatar firstName={userData.firstName} lastName={userData.lastName} />
-          )}
-          <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold pointer-events-none">
-            Change
-          </div>
-        </div>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          accept="image/jpeg,image/png,image/webp,image/gif"
-          className="hidden"
-          onChange={handleFileInput}
-        />
-
-        <div
-          onDrop={handleDrop}
-          onDragOver={handleDragOver}
-          onDragLeave={handleDragLeave}
-          onClick={() => fileInputRef.current?.click()}
-          className={`w-full border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors text-sm select-none ${
-            isDragging
-              ? "border-primary bg-primary/10 text-primary"
-              : "border-base-300 hover:border-primary/50 text-base-content/50"
+    <div className="card-body p-5 max-h-[85vh] overflow-y-auto">
+      {/* ── Tab Selector ── */}
+      <div className="tabs tabs-boxed mb-4 rounded-2xl bg-base-300 p-1 flex justify-center">
+        <button
+          type="button"
+          onClick={() => setActiveTab("info")}
+          className={`tab flex-1 rounded-xl text-xs font-semibold py-2 transition-all ${
+            activeTab === "info" ? "tab-active bg-primary text-primary-content shadow-sm" : "text-base-content/60"
           }`}
         >
-          {preview
-            ? "✅ Photo selected — click Upload to save"
-            : "Drag & drop a photo here, or click to browse"}
-          <p className="text-xs mt-1 text-base-content/40">
-            JPG, PNG, WEBP or GIF · max 5 MB
-          </p>
-        </div>
-
-        {preview && (
-          <div className="flex gap-2 w-full">
-            <button
-              type="button"
-              onClick={handleUploadPhoto}
-              disabled={isProcessing}
-              className="btn btn-primary btn-sm flex-1 rounded-xl"
-            >
-              {uploading ? (
-                <><span className="loading loading-spinner loading-xs" /> Uploading…</>
-              ) : (
-                "Upload Photo"
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => setPreview(null)}
-              disabled={isProcessing}
-              className="btn btn-ghost btn-sm rounded-xl"
-            >
-              Cancel
-            </button>
-          </div>
-        )}
-
-        {!preview && currentPhoto && (
-          <button
-            type="button"
-            onClick={handleDeletePhoto}
-            disabled={isProcessing}
-            className="btn btn-error btn-outline btn-sm w-full rounded-xl"
-          >
-            {deleting ? (
-              <><span className="loading loading-spinner loading-xs" /> Removing…</>
-            ) : (
-              "Remove Photo"
-            )}
-          </button>
-        )}
+          👤 Profile Info
+        </button>
       </div>
 
-      <div className="divider my-1" />
+      {activeTab === "info" ? (
+        <>
+          <h2 className="card-title block text-center text-sm font-bold mb-4">
+            Profile Information
+          </h2>
 
-      <p className="text-center text-sm text-base-content/50 mb-3">
-        Update your display name below.
-      </p>
+          {/* ── Photo area ─────────────────────────────────────────── */}
+          <div className="flex flex-col items-center gap-3 mb-4">
+            <div className="relative group cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+              {preview || currentPhoto ? (
+                <img
+                  src={preview ?? currentPhoto}
+                  alt="Profile"
+                  className="w-24 h-24 rounded-full object-cover border-2 border-primary shadow-lg"
+                />
+              ) : (
+                <DefaultAvatar firstName={userData.firstName} lastName={userData.lastName} />
+              )}
+              <div className="absolute inset-0 rounded-full bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white text-xs font-semibold pointer-events-none">
+                Change
+              </div>
+            </div>
 
-      <form onSubmit={handleSubmit}>
-        <div className="flex gap-4 justify-center flex-wrap">
-          <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
-            <label htmlFor="firstName" className="text-sm font-medium">
-              First Name <span className="text-red-500">*</span>
-            </label>
             <input
-              type="text"
-              id="firstName"
-              value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
-              className="input rounded-lg"
-              placeholder="First name"
-              required
+              ref={fileInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/gif"
+              className="hidden"
+              onChange={handleFileInput}
             />
-          </div>
-          <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
-            <label htmlFor="lastName" className="text-sm font-medium">
-              Last Name
-            </label>
-            <input
-              type="text"
-              id="lastName"
-              value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
-              className="input rounded-lg"
-              placeholder="Optional"
-            />
-          </div>
-        </div>
 
-        <button
-          type="submit"
-          className="btn btn-primary w-full rounded-lg mt-4"
-          disabled={isProcessing}
-        >
-          {saving ? "Saving…" : "Save Changes"}
-        </button>
-      </form>
+            <div
+              onDrop={handleDrop}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onClick={() => fileInputRef.current?.click()}
+              className={`w-full border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors text-xs select-none ${
+                isDragging
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-base-300 hover:border-primary/50 text-base-content/50"
+              }`}
+            >
+              {preview
+                ? "✅ Photo selected — click Upload to save"
+                : "Drag & drop a photo here, or click to browse"}
+              <p className="text-[10px] mt-1 text-base-content/40">
+                JPG, PNG, WEBP or GIF · max 5 MB
+              </p>
+            </div>
+
+            {preview && (
+              <div className="flex gap-2 w-full">
+                <button
+                  type="button"
+                  onClick={handleUploadPhoto}
+                  disabled={isProcessing}
+                  className="btn btn-primary btn-sm flex-1 rounded-xl"
+                >
+                  {uploading ? (
+                    <><span className="loading loading-spinner loading-xs" /> Uploading…</>
+                  ) : (
+                    "Upload Photo"
+                  )}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPreview(null)}
+                  disabled={isProcessing}
+                  className="btn btn-ghost btn-sm rounded-xl"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
+            {!preview && currentPhoto && (
+              <button
+                type="button"
+                onClick={handleDeletePhoto}
+                disabled={isProcessing}
+                className="btn btn-error btn-outline btn-sm w-full rounded-xl"
+              >
+                {deleting ? (
+                  <><span className="loading loading-spinner loading-xs" /> Removing…</>
+                ) : (
+                  "Remove Photo"
+                )}
+              </button>
+            )}
+          </div>
+
+          <div className="divider my-1" />
+
+          <p className="text-center text-xs text-base-content/50 mb-3">
+            Update your display name below.
+          </p>
+
+          <form onSubmit={handleSubmit}>
+            <div className="flex gap-4 justify-center flex-wrap">
+              <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
+                <label htmlFor="firstName" className="text-xs font-semibold">
+                  First Name <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  id="firstName"
+                  value={firstName}
+                  onChange={(e) => setFirstName(e.target.value)}
+                  className="input input-sm h-10 rounded-lg"
+                  placeholder="First name"
+                  required
+                />
+              </div>
+              <div className="flex flex-col gap-1 flex-1 min-w-[140px]">
+                <label htmlFor="lastName" className="text-xs font-semibold">
+                  Last Name
+                </label>
+                <input
+                  type="text"
+                  id="lastName"
+                  value={lastName}
+                  onChange={(e) => setLastName(e.target.value)}
+                  className="input input-sm h-10 rounded-lg"
+                  placeholder="Optional"
+                />
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              className="btn btn-primary btn-sm h-10 w-full rounded-lg mt-5 font-bold"
+              disabled={isProcessing}
+            >
+              {saving ? "Saving…" : "Save Changes"}
+            </button>
+          </form>
+        </>
+      ) : null}
     </div>
   );
 };

@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const authMiddleware = require("../middleware/authMiddleware");
 const entryController = require("../controllers/entryController");
+const savedSearchController = require("../controllers/savedSearchController");
+const { searchLimiter } = require("../middleware/rateLimiter");
 
 router.use(authMiddleware);
 
@@ -9,7 +11,13 @@ router.post("/", entryController.createEntry);
 router.get("/", entryController.getEntries);
 
 // ── Specific string routes MUST come before /:id ──────────────────
-router.get("/search", entryController.searchEntries);
+router.get("/search", searchLimiter, entryController.searchEntries);
+
+// Smart Folders / Saved Searches routes
+router.get("/saved-searches", savedSearchController.getSavedSearches);
+router.post("/saved-searches", savedSearchController.createSavedSearch);
+router.delete("/saved-searches/:id", savedSearchController.deleteSavedSearch);
+
 router.post("/analyze", entryController.analyzeEntry);
 router.get("/tags", entryController.getUserTags);
 router.get("/calendar", entryController.getCalendarData);

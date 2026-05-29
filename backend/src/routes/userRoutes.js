@@ -4,12 +4,14 @@ const authMiddleware = require("../middleware/authMiddleware");
 const {
   viewProfile,
   updateProfile,
+  getUserProfileById,
   uploadProfilePhoto,
   deleteProfilePhoto,
 } = require("../controllers/userController");
 
 router.get(   "/me",       authMiddleware, viewProfile);
 router.put(   "/me",       authMiddleware, updateProfile);
+router.get(   "/profile/:id", authMiddleware, getUserProfileById);
 router.post(  "/me/photo", authMiddleware, uploadProfilePhoto);
 router.delete("/me/photo", authMiddleware, deleteProfilePhoto);
 

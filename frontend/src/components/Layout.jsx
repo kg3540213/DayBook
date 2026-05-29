@@ -10,16 +10,21 @@ import { Link, Outlet } from "react-router-dom";
 import Footer from "./Footer";
 import { useEffect, useState } from "react";
 import { useProfileQuery } from "../redux/api/usersApiSlice";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { removeUserInfo, userInfo, setEncKey } from "../redux/features/userSlice";
 import { restoreKeyFromSession } from "../utils/crypto";
 import Loader from "./Loader";
 import NavLinks from "./navbar/NavLinks";
 import SearchBox from "./navbar/SearchBox";
 import logo from "../assets/logo.svg";
+import { useGetSavedSearchesQuery } from "../redux/api/entriesApiSlice";
+import { FaFolder } from "react-icons/fa";
 
 const Layout = () => {
   const { data: profile, isError, isLoading } = useProfileQuery();
+  const user = useSelector((s) => s.user.data);
+  const { data: savedSearchesData } = useGetSavedSearchesQuery(undefined, { skip: !user });
+
   const dispatch  = useDispatch();
   const [isReady, setIsReady] = useState(false);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
@@ -96,6 +101,39 @@ const Layout = () => {
 
           <SearchBox toggle={toggle} expanded={true} />
           <NavLinks toggle={toggle} />
+
+          {user && savedSearchesData?.data?.length > 0 && (
+            <>
+              <div className="divider my-2 opacity-50"></div>
+              <li className="menu-title flex flex-row items-center gap-1.5 px-3 py-1 text-xs font-bold tracking-wider text-base-content/40 uppercase">
+                <FaFolder className="text-[10px]" /> Smart Folders
+              </li>
+              <div className="flex flex-col gap-1 max-h-[220px] overflow-y-auto mt-1 px-1">
+                {savedSearchesData.data.map((folder) => {
+                  const params = new URLSearchParams();
+                  if (folder.searchText) params.set("search", folder.searchText);
+                  if (folder.mood) params.set("mood", folder.mood);
+                  if (folder.dateFrom) params.set("dateFrom", folder.dateFrom);
+                  if (folder.dateTo) params.set("dateTo", folder.dateTo);
+                  if (folder.tags && folder.tags.length > 0) params.set("tags", folder.tags.join(","));
+                  params.set("page", "1");
+                  
+                  return (
+                    <li key={folder._id}>
+                      <Link
+                        to={`/entries?${params.toString()}`}
+                        onClick={toggle}
+                        className="flex items-center gap-2 py-2 px-3 text-xs rounded-xl hover:bg-base-300 transition-colors"
+                      >
+                        <span className="text-base-content/40 shrink-0">📁</span>
+                        <span className="truncate flex-1 font-medium">{folder.name}</span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </ul>
       </div>
     </div>

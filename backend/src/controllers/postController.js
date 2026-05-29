@@ -74,11 +74,14 @@ exports.createPost = async (req, res) => {
   }
 };
 
-// ── 2. Get Today's Feed ──
+// ── 2. Get Today's Feed ───────────────────────────────────────────
 exports.getTodayFeed = async (req, res) => {
+  const currentUserId = req.user._id;
+  const cacheKey = `feed:today:${currentUserId}`;
+
   try {
     // ── Check cache first ──
-    const cachedFeed = await redis.get("feed:today");
+    const cachedFeed = await redis.get(cacheKey);
     if (cachedFeed) {
       return res.status(200).json({
         posts: JSON.parse(cachedFeed),
@@ -86,7 +89,6 @@ exports.getTodayFeed = async (req, res) => {
       });
     }
 
-    // ── Get today's posts ──
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -96,11 +98,11 @@ exports.getTodayFeed = async (req, res) => {
     const posts = await Post.find({
       createdAt: { $gte: today, $lt: tomorrow },
     })
-      .sort({ createdAt: -1 }) // Latest first
+      .sort({ createdAt: -1 })
       .lean();
 
-    // ── Cache for 5 minutes ──
-    await redis.setex("feed:today", 300, JSON.stringify(posts));
+    // ── Cache for 3 minutes ─────────────────────────────────────────────────────
+    await redis.setex(cacheKey, 180, JSON.stringify(posts));
 
     res.status(200).json({
       posts,

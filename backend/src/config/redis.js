@@ -1,23 +1,5 @@
-const Redis = require("ioredis");
+const Redis = require("ioredis")
 
-// ------------------------------------------------------------------
-// Redis client — Redis Cloud setup
-//
-// In your .env set REDIS_URL to one of:
-//
-//   Without TLS (port 6379):
-//   REDIS_URL=redis://:<password>@<host>:<port>
-//
-//   With TLS (port 6380, Redis Cloud default):
-//   REDIS_URL=rediss://:<password>@<host>:<port>
-//              ↑ double 's' = TLS
-//
-// Format: redis[s]://:<password>@<host>:<port>
-//                    ↑ colon before password, no username needed
-// ------------------------------------------------------------------
-
-// ioredis automatically enables TLS when the URL scheme is "rediss://"
-// rejectUnauthorized: false accepts Redis Cloud's managed certificate
 const redis = new Redis(process.env.REDIS_URL, {
   tls: process.env.REDIS_URL?.startsWith("rediss://")
     ? { rejectUnauthorized: false }

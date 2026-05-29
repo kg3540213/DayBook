@@ -81,6 +81,11 @@ const usersApiSlice = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ["User"],
     }),
+
+    getUserProfile: builder.query({
+      query: (id) => `/users/profile/${id}`,
+      providesTags: (result, error, id) => [{ type: "User", id }],
+    }),
   }),
 });
 
@@ -95,4 +100,5 @@ export const {
   useChangePasswordMutation,
   useUploadProfilePhotoMutation,
   useDeleteProfilePhotoMutation,
+  useGetUserProfileQuery,
 } = usersApiSlice;

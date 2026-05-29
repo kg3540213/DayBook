@@ -42,4 +42,11 @@ const resendOtpLimiter = makeLimiter({
     "Too many resend requests from this IP. Please wait 5 minutes and try again.",
 });
 
-module.exports = { loginLimiter, verifyOtpLimiter, resendOtpLimiter };
+// Search — 30 attempts per 1 minute per IP.
+const searchLimiter = makeLimiter({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30,
+  message: "Too many search requests from this IP. Please wait a minute.",
+});
+
+module.exports = { loginLimiter, verifyOtpLimiter, resendOtpLimiter, searchLimiter };
