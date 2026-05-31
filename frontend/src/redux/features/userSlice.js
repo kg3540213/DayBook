@@ -1,11 +1,3 @@
-// frontend/src/redux/features/userSlice.js
-//
-// Option A changes:
-//   - `dataKey`    → `encKey`   (the derived AES key stored as base64)
-//   - `encryptedDataKey` removed from user data shape (backend no longer sends it)
-//   - New action `setEncKey` replaces `setUserDataKey`
-//   - `removeUserInfo` clears encKey along with everything else
-
 import { createSlice } from "@reduxjs/toolkit";
 
 const initialState = {

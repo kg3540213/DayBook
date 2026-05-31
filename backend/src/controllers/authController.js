@@ -118,6 +118,9 @@ const signup = async (req, res) => {
       email,
     });
   } catch (error) {
+    if (error.isFatal) {
+      console.error("Warning: Refresh token persistence failed during signup:", error.message);
+    }
     console.error("Signup error:", error);
     res.status(500).json({ message: "Something went wrong! Please try again later!" });
   }
@@ -155,7 +158,17 @@ const verifyOtp = async (req, res) => {
     await user.save();
 
     // Issue both tokens (access + refresh)
-    await generateToken(user._id, res);
+    try {
+      await generateToken(user._id, res);
+    } catch (err) {
+      if (err.isFatal) {
+        console.error("[verifyOtp] Warning: Refresh token persistence failed:", err.message);
+        // For verification, this is less critical — proceed with verification success
+        // User can refresh manually if needed
+      } else {
+        throw err;
+      }
+    }
 
     res.status(200).json({
       message: "Email verified successfully! Welcome to DayBook.",
@@ -246,7 +259,16 @@ const login = async (req, res) => {
       return res.status(401).json({ message: "Invalid credentials!" });
 
     // Issue both tokens (access + refresh)
-    await generateToken(user._id, res);
+    try {
+      await generateToken(user._id, res);
+    } catch (err) {
+      if (err.isFatal) {
+        console.error("[login] CRITICAL: Refresh token persistence failed:", err.message);
+        // For login, token persistence is critical — fail the login
+        return res.status(500).json({ message: "Session initialization failed. Please try again." });
+      }
+      throw err;
+    }
 
     res.json({
       message: "User logged in successfully!",
@@ -301,10 +323,29 @@ const refresh = async (req, res) => {
     }
 
     // Delete old refresh token record (rotation — old token is now dead)
-    await RefreshToken.deleteOne({ _id: record._id });
+    // IMPORTANT: Verify deletion succeeded
+    const deleteResult = await RefreshToken.deleteOne({ _id: record._id });
+    if (deleteResult.deletedCount === 0) {
+      console.warn("[refresh] Warning: Old refresh token was not deleted. Possible race condition.", {
+        tokenId: record._id,
+        userId: record.userId,
+      });
+      // Still proceed — if we bail here, user loses session. New token rotation will eventually expire old one.
+    }
 
     // Issue fresh access token + refresh token pair
-    await generateToken(user._id, res);
+    // CRITICAL: If this fails, the entire refresh must fail
+    try {
+      await generateToken(user._id, res);
+    } catch (err) {
+      if (err.isFatal) {
+        console.error("[refresh] CRITICAL: Failed to issue new tokens:", err.message);
+        // If we can't issue new tokens, the refresh failed
+        clearAuthCookies(res);
+        return res.status(500).json({ message: "Token refresh failed. Please log in again." });
+      }
+      throw err;
+    }
 
     res.status(200).json({
       message: "Token refreshed.",
@@ -332,14 +373,24 @@ const logout = async (req, res) => {
       // Invalidate the stored refresh token so even if the cookie is somehow
       // replayed, the server will reject it
       const tokenHash = generateToken.hashToken(rawRefresh);
-      await RefreshToken.deleteOne({ tokenHash }).catch((err) =>
-        console.warn("[logout] Could not delete refresh token:", err.message)
-      );
+      const deleteResult = await RefreshToken.deleteOne({ tokenHash }).catch((err) => {
+        console.warn("[logout] Could not delete refresh token:", err.message);
+        return { deletedCount: 0 };
+      });
+      if (deleteResult.deletedCount === 0) {
+        console.warn("[logout] Refresh token not found in DB (may have already been used/deleted).");
+      }
     }
 
     // Also clean up any other refresh tokens for this user (belt-and-suspenders)
     if (req.user?._id) {
-      await RefreshToken.deleteMany({ userId: req.user._id }).catch(() => {});
+      const cleanupResult = await RefreshToken.deleteMany({ userId: req.user._id }).catch((err) => {
+        console.warn("[logout] Could not cleanup user refresh tokens:", err.message);
+        return { deletedCount: 0 };
+      });
+      if (cleanupResult.deletedCount > 0) {
+        console.log(`[logout] Cleaned up ${cleanupResult.deletedCount} refresh token(s) for user.`);
+      }
     }
 
     clearAuthCookies(res);
@@ -380,7 +431,17 @@ const changePassword = async (req, res) => {
     await loggedUser.save();
 
     // Issue fresh tokens after password change so the current session continues
-    await generateToken(loggedUser._id, res);
+    try {
+      await generateToken(loggedUser._id, res);
+    } catch (err) {
+      if (err.isFatal) {
+        console.error("[changePassword] Warning: Refresh token persistence failed:", err.message);
+        // User's password was changed successfully, so we'll proceed
+        // They may need to log in manually on next session
+      } else {
+        throw err;
+      }
+    }
 
     // Client is responsible for:
     //   1. Clearing the old session key (clearKeyFromSession)

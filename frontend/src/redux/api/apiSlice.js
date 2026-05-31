@@ -1,18 +1,3 @@
-// frontend/src/redux/api/apiSlice.js
-//
-// Adds silent token refresh via RTK Query's re-authentication pattern.
-//
-// How it works:
-//   1. Every API call goes through baseQuery (fetchBaseQuery)
-//   2. If the server returns 401 with { tokenExpired: true }, we call
-//      POST /api/auth/refresh (which uses the httpOnly refresh token cookie)
-//   3. If refresh succeeds, we retry the original failed request once
-//   4. If refresh fails (refresh token expired / invalid), we clear Redux
-//      state and redirect to /login — the user must re-authenticate
-//
-// This is 100% transparent to components — they never see the 401 or the retry.
-// No component code needs to change.
-
 import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 import { removeUserInfo }           from "../features/userSlice";
 import { clearKeyFromSession }      from "../../utils/crypto";
@@ -60,8 +45,13 @@ const baseQueryWithReauth = async (args, api, extraOptions) => {
       // so the retry will pick it up automatically.
       result = await baseQuery(args, api, extraOptions);
     } else {
-      // Refresh failed (refresh token expired or invalid) — log the user out
-      console.warn("[apiSlice] Refresh token invalid/expired — logging out.");
+      // Refresh failed (refresh token expired, invalid, or server error) — log the user out
+      const errorStatus = refreshResult.error?.status;
+      const errorMsg = refreshResult.error?.data?.message || "Token refresh failed";
+      
+      console.warn(`[apiSlice] Refresh failed (${errorStatus}): ${errorMsg}`, refreshResult.error);
+      console.warn("[apiSlice] Session invalid or expired — logging out.");
+      
       api.dispatch(removeUserInfo());
       clearKeyFromSession();
 

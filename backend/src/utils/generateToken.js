@@ -78,14 +78,18 @@ const generateToken = async (_id, res) => {
   // Change to deleteOne() if you want to allow multiple devices simultaneously.
   try {
     await RefreshToken.deleteMany({ userId: _id });
-    await RefreshToken.create({
+    const result = await RefreshToken.create({
       userId:    _id,
       tokenHash: hashToken(rawRefresh),
       expiresAt: refreshExpiry,
     });
+    if (!result) {
+      throw new Error("Failed to create refresh token record");
+    }
   } catch (err) {
-    // Non-fatal — log but don't crash the login response
-    console.error("[generateToken] Failed to persist refresh token:", err.message);
+    // Mark as fatal so caller can decide whether to crash or log
+    err.isFatal = true;
+    throw err;
   }
 
   return rawRefresh; // returned but callers don't need it
