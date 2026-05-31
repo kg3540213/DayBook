@@ -3,15 +3,13 @@
 // Option A: Password-based encryption — no dataKey, no encryptedDataKey.
 //
 // Auth model:
-//   - POST /login        → issues access token (15 min) + refresh token (7 days)
-//   - POST /refresh      → silent re-auth: validates refresh token, issues new pair
-//   - POST /logout       → clears both cookies + invalidates DB refresh token
-//   - PUT  /change-password → clears session key (client-side), issues new tokens
+//   - POST /login        → issues access token (15 min)
+//   - POST /logout       → clears auth cookie
+//   - PUT  /change-password → clears session key (client-side), issues new token
 //
 // Everything else (signup, OTP, etc.) is unchanged from the original.
 
 const User      = require("../models/userModel");
-const RefreshToken = require("../models/refreshTokenModel");
 const bcrypt    = require("bcryptjs");
 const validator = require("validator");
 const jwt       = require("jsonwebtoken");
@@ -24,9 +22,13 @@ const generateOtp = () => crypto.randomInt(100000, 999999).toString();
 
 // ── cookie clearing helper ────────────────────────────────────────
 const clearAuthCookies = (res) => {
-  const base = { httpOnly: true, secure: true, sameSite: "None" };
-  res.cookie("token",        "", { ...base, expires: new Date(0) });
-  res.cookie("refreshToken", "", { ...base, expires: new Date(0), path: "/api/auth" });
+  const isProduction = process.env.NODE_ENV === "production";
+  const base = {
+    httpOnly: true,
+    secure:   isProduction,
+    sameSite: isProduction ? "None" : "Lax",
+  };
+  res.cookie("token", "", { ...base, expires: new Date(0) });
 };
 
 // ── SIGNUP ────────────────────────────────────────────────────────
@@ -118,9 +120,6 @@ const signup = async (req, res) => {
       email,
     });
   } catch (error) {
-    if (error.isFatal) {
-      console.error("Warning: Refresh token persistence failed during signup:", error.message);
-    }
     console.error("Signup error:", error);
     res.status(500).json({ message: "Something went wrong! Please try again later!" });
   }
@@ -157,17 +156,11 @@ const verifyOtp = async (req, res) => {
     user.otpSentAt  = null;
     await user.save();
 
-    // Issue both tokens (access + refresh)
     try {
-      await generateToken(user._id, res);
+      generateToken(user._id, res);
     } catch (err) {
-      if (err.isFatal) {
-        console.error("[verifyOtp] Warning: Refresh token persistence failed:", err.message);
-        // For verification, this is less critical — proceed with verification success
-        // User can refresh manually if needed
-      } else {
-        throw err;
-      }
+      console.error("[verifyOtp] Token issuance failed:", err.message);
+      throw err;
     }
 
     res.status(200).json({
@@ -258,16 +251,11 @@ const login = async (req, res) => {
     if (!passwordMatch)
       return res.status(401).json({ message: "Invalid credentials!" });
 
-    // Issue both tokens (access + refresh)
     try {
-      await generateToken(user._id, res);
+      generateToken(user._id, res);
     } catch (err) {
-      if (err.isFatal) {
-        console.error("[login] CRITICAL: Refresh token persistence failed:", err.message);
-        // For login, token persistence is critical — fail the login
-        return res.status(500).json({ message: "Session initialization failed. Please try again." });
-      }
-      throw err;
+      console.error("[login] Token issuance failed:", err.message);
+      return res.status(500).json({ message: "Session initialization failed. Please try again." });
     }
 
     res.json({
@@ -285,119 +273,13 @@ const login = async (req, res) => {
   }
 };
 
-// ── REFRESH ───────────────────────────────────────────────────────
-// Silent token refresh — called automatically by the frontend when the
-// access token has expired (API returns 401).
-//
-// Flow:
-//   1. Read raw refresh token from cookie
-//   2. Hash it and look it up in DB
-//   3. Verify it hasn't expired
-//   4. Issue a new access token + refresh token pair (rotation)
-//   5. Delete the old DB record (so the old refresh token is dead)
-const refresh = async (req, res) => {
-  try {
-    const rawRefresh = req.cookies?.refreshToken;
-
-    if (!rawRefresh)
-      return res.status(401).json({ message: "No refresh token. Please log in again." });
-
-    const tokenHash = generateToken.hashToken(rawRefresh);
-    const record    = await RefreshToken.findOne({ tokenHash });
-
-    if (!record)
-      return res.status(401).json({ message: "Invalid or expired refresh token. Please log in again." });
-
-    if (new Date() > record.expiresAt) {
-      // Token expired — clean up and reject
-      await RefreshToken.deleteOne({ _id: record._id });
-      clearAuthCookies(res);
-      return res.status(401).json({ message: "Refresh token expired. Please log in again." });
-    }
-
-    const user = await User.findById(record.userId);
-    if (!user) {
-      await RefreshToken.deleteOne({ _id: record._id });
-      clearAuthCookies(res);
-      return res.status(401).json({ message: "User not found. Please log in again." });
-    }
-
-    // Delete old refresh token record (rotation — old token is now dead)
-    // IMPORTANT: Verify deletion succeeded
-    const deleteResult = await RefreshToken.deleteOne({ _id: record._id });
-    if (deleteResult.deletedCount === 0) {
-      console.warn("[refresh] Warning: Old refresh token was not deleted. Possible race condition.", {
-        tokenId: record._id,
-        userId: record.userId,
-      });
-      // Still proceed — if we bail here, user loses session. New token rotation will eventually expire old one.
-    }
-
-    // Issue fresh access token + refresh token pair
-    // CRITICAL: If this fails, the entire refresh must fail
-    try {
-      await generateToken(user._id, res);
-    } catch (err) {
-      if (err.isFatal) {
-        console.error("[refresh] CRITICAL: Failed to issue new tokens:", err.message);
-        // If we can't issue new tokens, the refresh failed
-        clearAuthCookies(res);
-        return res.status(500).json({ message: "Token refresh failed. Please log in again." });
-      }
-      throw err;
-    }
-
-    res.status(200).json({
-      message: "Token refreshed.",
-      data: {
-        _id:       user._id,
-        firstName: user.firstName,
-        lastName:  user.lastName,
-        email:     user.email,
-      },
-    });
-  } catch (error) {
-    console.error("Token refresh error:", error);
-    res.status(500).json({ message: "Something went wrong! Please try again later!" });
-  }
-};
-
 // ── LOGOUT ────────────────────────────────────────────────────────
-// 1. Clear both cookies
-// 2. Invalidate the refresh token record in DB so it can't be reused
 const logout = async (req, res) => {
   try {
-    const rawRefresh = req.cookies?.refreshToken;
-
-    if (rawRefresh) {
-      // Invalidate the stored refresh token so even if the cookie is somehow
-      // replayed, the server will reject it
-      const tokenHash = generateToken.hashToken(rawRefresh);
-      const deleteResult = await RefreshToken.deleteOne({ tokenHash }).catch((err) => {
-        console.warn("[logout] Could not delete refresh token:", err.message);
-        return { deletedCount: 0 };
-      });
-      if (deleteResult.deletedCount === 0) {
-        console.warn("[logout] Refresh token not found in DB (may have already been used/deleted).");
-      }
-    }
-
-    // Also clean up any other refresh tokens for this user (belt-and-suspenders)
-    if (req.user?._id) {
-      const cleanupResult = await RefreshToken.deleteMany({ userId: req.user._id }).catch((err) => {
-        console.warn("[logout] Could not cleanup user refresh tokens:", err.message);
-        return { deletedCount: 0 };
-      });
-      if (cleanupResult.deletedCount > 0) {
-        console.log(`[logout] Cleaned up ${cleanupResult.deletedCount} refresh token(s) for user.`);
-      }
-    }
-
     clearAuthCookies(res);
     res.status(200).json({ message: "Logout successfully!" });
   } catch (error) {
     console.error("Logout error:", error);
-    // Still clear cookies even if DB cleanup fails
     clearAuthCookies(res);
     res.status(200).json({ message: "Logout successfully!" });
   }
@@ -430,17 +312,12 @@ const changePassword = async (req, res) => {
     loggedUser.password = await bcrypt.hash(newPassword, 10);
     await loggedUser.save();
 
-    // Issue fresh tokens after password change so the current session continues
+    // Issue a fresh access token after password change so the session continues
     try {
-      await generateToken(loggedUser._id, res);
+      generateToken(loggedUser._id, res);
     } catch (err) {
-      if (err.isFatal) {
-        console.error("[changePassword] Warning: Refresh token persistence failed:", err.message);
-        // User's password was changed successfully, so we'll proceed
-        // They may need to log in manually on next session
-      } else {
-        throw err;
-      }
+      console.error("[changePassword] Token issuance failed:", err.message);
+      // Password changed successfully; the user may need to log in again.
     }
 
     // Client is responsible for:
@@ -456,4 +333,4 @@ const changePassword = async (req, res) => {
   }
 };
 
-module.exports = { signup, verifyOtp, resendOtp, login, refresh, logout, changePassword };
+module.exports = { signup, verifyOtp, resendOtp, login, logout, changePassword };

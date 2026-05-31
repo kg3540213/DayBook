@@ -76,8 +76,7 @@ exports.createPost = async (req, res) => {
 
 // ── 2. Get Today's Feed ───────────────────────────────────────────
 exports.getTodayFeed = async (req, res) => {
-  const currentUserId = req.user._id;
-  const cacheKey = `feed:today:${currentUserId}`;
+  const cacheKey = "feed:today";
 
   try {
     // ── Check cache first ──
@@ -157,5 +156,155 @@ exports.getUserPostCountToday = async (req, res) => {
   } catch (error) {
     console.error("Get post count error:", error);
     res.status(500).json({ error: "Failed to get post count" });
+  }
+};
+
+// ── 5. Like a Post ────────────────────────────────────────────
+exports.likePost = async (req, res) => {
+  try {
+    const { postId } = req.params;
+    const userId = req.user._id;
+
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ error: "Post not found" });
+    }
+
+    // Check if user already liked the post
+    const alreadyLiked = post.likes.includes(userId);
+    if (alreadyLiked) {
+      return res.status(400).json({ error: "You already liked this post" });
+    }
+
+    // Add user to likes
+    post.likes.push(userId);
+    await post.save();
+
+    // Invalidate cache
+    await redis.del("feed:today");
+
+    res.status(200).json({
+      message: "Post liked successfully",
+      likes: post.likes.length,
+    });
+  } catch (error) {
+    console.error("Like post error:", error);
+    res.status(500).json({ error: "Failed to like post" });
+  }
+};
+
+// ── 6. Unlike a Post ──────────────────────────────────────────
+exports.unlikePost = async (req, res) => {
+  try {
+    const { postId } = req.params;
+    const userId = req.user._id;
+
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ error: "Post not found" });
+    }
+
+    // Check if user liked the post
+    const likeIndex = post.likes.indexOf(userId);
+    if (likeIndex === -1) {
+      return res.status(400).json({ error: "You haven't liked this post" });
+    }
+
+    // Remove user from likes
+    post.likes.splice(likeIndex, 1);
+    await post.save();
+
+    // Invalidate cache
+    await redis.del("feed:today");
+
+    res.status(200).json({
+      message: "Post unliked successfully",
+      likes: post.likes.length,
+    });
+  } catch (error) {
+    console.error("Unlike post error:", error);
+    res.status(500).json({ error: "Failed to unlike post" });
+  }
+};
+
+// ── 7. Add Comment to Post ────────────────────────────────────
+exports.addComment = async (req, res) => {
+  try {
+    const { postId } = req.params;
+    const { content } = req.body;
+    const userId = req.user._id;
+    const userName = req.user.firstName || "Anonymous";
+
+    // Validation
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({ error: "Comment cannot be empty" });
+    }
+
+    if (content.length > 200) {
+      return res.status(400).json({ error: "Comment must be 200 characters or less" });
+    }
+
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ error: "Post not found" });
+    }
+
+    // Add comment
+    const comment = {
+      userId,
+      userName,
+      content: content.trim(),
+      createdAt: new Date(),
+    };
+
+    post.comments.push(comment);
+    await post.save();
+
+    // Invalidate cache
+    await redis.del("feed:today");
+
+    res.status(201).json({
+      message: "Comment added successfully",
+      comment: post.comments[post.comments.length - 1],
+    });
+  } catch (error) {
+    console.error("Add comment error:", error);
+    res.status(500).json({ error: "Failed to add comment" });
+  }
+};
+
+// ── 8. Delete Comment (Own comments only) ─────────────────────
+exports.deleteComment = async (req, res) => {
+  try {
+    const { postId, commentId } = req.params;
+    const userId = req.user._id;
+
+    const post = await Post.findById(postId);
+    if (!post) {
+      return res.status(404).json({ error: "Post not found" });
+    }
+
+    // Find comment
+    const commentIndex = post.comments.findIndex((c) => c._id.toString() === commentId);
+    if (commentIndex === -1) {
+      return res.status(404).json({ error: "Comment not found" });
+    }
+
+    // Check ownership
+    if (post.comments[commentIndex].userId.toString() !== userId.toString()) {
+      return res.status(403).json({ error: "You can only delete your own comments" });
+    }
+
+    // Delete comment
+    post.comments.splice(commentIndex, 1);
+    await post.save();
+
+    // Invalidate cache
+    await redis.del("feed:today");
+
+    res.status(200).json({ message: "Comment deleted successfully" });
+  } catch (error) {
+    console.error("Delete comment error:", error);
+    res.status(500).json({ error: "Failed to delete comment" });
   }
 };

@@ -3,7 +3,7 @@ import { createApi, fetchBaseQuery } from "@reduxjs/toolkit/query/react";
 export const postsApiSlice = createApi({
   reducerPath: "postsApi",
   baseQuery: fetchBaseQuery({
-    baseUrl: `${import.meta.env.VITE_BACKEND_URL}/api/posts`,
+    baseUrl: "/api/posts",
     credentials: "include",
   }),
   tagTypes: ["Posts", "PostCount"],
@@ -40,6 +40,43 @@ export const postsApiSlice = createApi({
       }),
       invalidatesTags: ["Posts", "PostCount"],
     }),
+
+    // ── Like a post ──
+    likePost: builder.mutation({
+      query: (postId) => ({
+        url: `/${postId}/like`,
+        method: "POST",
+      }),
+      invalidatesTags: ["Posts"],
+    }),
+
+    // ── Unlike a post ──
+    unlikePost: builder.mutation({
+      query: (postId) => ({
+        url: `/${postId}/like`,
+        method: "DELETE",
+      }),
+      invalidatesTags: ["Posts"],
+    }),
+
+    // ── Add comment to post ──
+    addComment: builder.mutation({
+      query: ({ postId, content }) => ({
+        url: `/${postId}/comment`,
+        method: "POST",
+        body: { content },
+      }),
+      invalidatesTags: ["Posts"],
+    }),
+
+    // ── Delete comment ──
+    deleteComment: builder.mutation({
+      query: ({ postId, commentId }) => ({
+        url: `/${postId}/comment/${commentId}`,
+        method: "DELETE",
+      }),
+      invalidatesTags: ["Posts"],
+    }),
   }),
 });
 
@@ -48,4 +85,8 @@ export const {
   useGetUserPostCountQuery,
   useCreatePostMutation,
   useDeletePostMutation,
+  useLikePostMutation,
+  useUnlikePostMutation,
+  useAddCommentMutation,
+  useDeleteCommentMutation,
 } = postsApiSlice;

@@ -6,6 +6,10 @@ const {
   getTodayFeed,
   deletePost,
   getUserPostCountToday,
+  likePost,
+  unlikePost,
+  addComment,
+  deleteComment,
 } = require("../controllers/postController");
 
 // ── All routes require authentication ──
@@ -24,5 +28,19 @@ router.post("/", createPost);
 
 // Delete own post
 router.delete("/:postId", deletePost);
+
+// ── Like/Unlike routes ─────────────────────────────────────────
+// Like a post
+router.post("/:postId/like", likePost);
+
+// Unlike a post
+router.delete("/:postId/like", unlikePost);
+
+// ── Comment routes ────────────────────────────────────────────
+// Add comment to post
+router.post("/:postId/comment", addComment);
+
+// Delete own comment
+router.delete("/:postId/comment/:commentId", deleteComment);
 
 module.exports = router;

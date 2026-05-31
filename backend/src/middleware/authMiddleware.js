@@ -1,8 +1,7 @@
 // backend/src/middleware/authMiddleware.js
 //
 // Verifies the short-lived ACCESS token ("token" cookie).
-// On expiry (TokenExpiredError), returns 401 with { tokenExpired: true }
-// so the frontend knows to silently call /api/auth/refresh before retrying.
+// On expiry, returns 401 so the client can re-authenticate.
 
 const jwt  = require("jsonwebtoken");
 const User = require("../models/userModel");
@@ -12,8 +11,7 @@ const authMiddleware = async (req, res, next) => {
 
   if (!token) {
     return res.status(401).json({
-      message:      "No token found! Please log in and try again!",
-      tokenExpired: false,
+      message: "No token found! Please log in and try again!",
     });
   }
 
@@ -31,15 +29,13 @@ const authMiddleware = async (req, res, next) => {
     // Distinguish "token has expired" from "token is invalid/tampered"
     if (error.name === "TokenExpiredError") {
       return res.status(401).json({
-        message:      "Access token expired.",
-        tokenExpired: true,   // ← frontend uses this flag to trigger silent refresh
+        message: "Access token expired. Please log in again.",
       });
     }
 
     console.error("Token verification failed:", error.message);
     return res.status(401).json({
-      message:      "Invalid or expired token! Please log in and try again!",
-      tokenExpired: false,
+      message: "Invalid or expired token! Please log in and try again!",
     });
   }
 };

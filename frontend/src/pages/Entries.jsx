@@ -12,14 +12,12 @@ import SmartFolder from "../components/entry/SmartFolder";
 import AddEntry from "../components/entry/AddEntry";
 import Loader from "../components/Loader";
 import { decryptText } from "../utils/crypto";
-import { useSemanticSearch } from "../hooks/useSemanticSearch";
 import {
   FaThumbtack,
   FaSearch,
   FaFolderPlus,
   FaTimes,
   FaFilter,
-  FaRobot,
   FaChevronDown,
   FaChevronUp,
   FaFolder,
@@ -28,9 +26,8 @@ import { toast } from "react-toastify";
 
 const ENTRIES_PER_PAGE = 6;
 
-const ActiveFilters = ({ search, mood, dateFrom, dateTo, tags, pinned, searchMode, onClear }) => {
+const ActiveFilters = ({ search, mood, dateFrom, dateTo, tags, pinned, onClear }) => {
   const parts = [];
-  if (searchMode === "semantic") parts.push("🤖 AI Semantic Search");
   if (search)   parts.push(`Keyword: "${search}"`);
   if (mood)     parts.push(`Mood: ${mood}`);
   if (dateFrom) parts.push(`From: ${dateFrom}`);
@@ -113,7 +110,6 @@ const Entries = () => {
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [pinned, setPinned] = useState(false);
-  const [searchMode, setSearchMode] = useState("classic"); // "classic" | "semantic"
 
   const [isFiltersExpanded, setIsFiltersExpanded] = useState(false);
   const [isTagsDropdownOpen, setIsTagsDropdownOpen] = useState(false);
@@ -129,29 +125,11 @@ const Entries = () => {
     setDateFrom(searchParams.get("dateFrom") ?? "");
     setDateTo(searchParams.get("dateTo") ?? "");
     setPinned(searchParams.get("pinned") === "true");
-    setSearchMode(searchParams.get("mode") === "semantic" ? "semantic" : "classic");
 
     const tagsParam = searchParams.get("tags") ?? "";
     setSelectedTags(tagsParam ? tagsParam.split(",") : []);
   }, [searchParams]);
 
-  // Setup semantic search hook
-  const {
-    results: semanticResults,
-    isSearching: isSemanticSearching,
-    search: debouncedSemanticSearch,
-    searchNow: semanticSearchNow,
-    clear: clearSemantic,
-  } = useSemanticSearch(allEntries);
-
-  // Automatically trigger semantic search when keyword changes in semantic mode
-  useEffect(() => {
-    if (searchMode === "semantic" && searchText.trim()) {
-      debouncedSemanticSearch(searchText);
-    } else {
-      clearSemantic();
-    }
-  }, [searchMode, searchText, debouncedSemanticSearch, clearSemantic]);
 
   // Handle click outside tag dropdown
   useEffect(() => {
@@ -174,7 +152,6 @@ const Entries = () => {
       dateFrom,
       dateTo,
       pinned: pinned ? "true" : "",
-      mode: searchMode,
       tags: selectedTags.join(","),
       page: "1",
       ...updates,
@@ -235,11 +212,6 @@ const Entries = () => {
     applyFiltersToUrl({ pinned: nextPinned ? "true" : "" });
   };
 
-  const handleModeToggle = (mode) => {
-    setSearchMode(mode);
-    applyFiltersToUrl({ mode });
-  };
-
   const handleClearFilters = () => {
     setSearchText("");
     setMood("");
@@ -247,8 +219,6 @@ const Entries = () => {
     setDateTo("");
     setSelectedTags([]);
     setPinned(false);
-    setSearchMode("classic");
-    clearSemantic();
     navigate("/entries");
   };
 
@@ -259,7 +229,6 @@ const Entries = () => {
     setDateTo(folder.dateTo || "");
     setSelectedTags(folder.tags || []);
     setPinned(false);
-    setSearchMode("classic");
 
     const params = new URLSearchParams();
     if (folder.searchText) params.set("search", folder.searchText);
@@ -308,14 +277,6 @@ const Entries = () => {
 
     // 1. Determine base entries order
     let base = [...allEntries];
-    if (searchMode === "semantic" && searchText.trim()) {
-      if (semanticResults) {
-        base = [...semanticResults];
-      } else {
-        // Semantic search is loading or hasn't started yet
-        return [];
-      }
-    }
 
     // 2. Filter by Mood
     if (mood) {
@@ -348,8 +309,8 @@ const Entries = () => {
       });
     }
 
-    // 6. Filter by Title/Content keyword (if Classic Mode and query is provided)
-    if (searchMode === "classic" && searchText.trim()) {
+    // 6. Filter by Title/Content keyword when query is provided
+    if (searchText.trim()) {
       const needle = searchText.trim().toLowerCase();
       base = base.filter((entry) => {
         if (entry.title.toLowerCase().includes(needle)) return true;
@@ -361,17 +322,15 @@ const Entries = () => {
       });
     }
 
-    // 7. Sort entries: pinned first, then by date descending (unless in Semantic mode which is pre-sorted by relevance score)
-    if (searchMode !== "semantic" || !searchText.trim()) {
-      base.sort((a, b) => {
-        if (a.isPinned && !b.isPinned) return -1;
-        if (!a.isPinned && b.isPinned) return 1;
-        return new Date(b.date) - new Date(a.date);
-      });
-    }
+    // 7. Sort entries: pinned first, then by date descending
+    base.sort((a, b) => {
+      if (a.isPinned && !b.isPinned) return -1;
+      if (!a.isPinned && b.isPinned) return 1;
+      return new Date(b.date) - new Date(a.date);
+    });
 
     return base;
-  }, [isLoading, allEntries, searchMode, searchText, semanticResults, mood, pinned, selectedTags, dateFrom, dateTo, encKey]);
+  }, [isLoading, allEntries, searchText, mood, pinned, selectedTags, dateFrom, dateTo, encKey]);
 
   // Pagination calculation
   const totalEntries = allFilteredEntries.length;
@@ -394,8 +353,7 @@ const Entries = () => {
     dateFrom ||
     dateTo ||
     selectedTags.length > 0 ||
-    pinned ||
-    searchMode === "semantic"
+    pinned
   );
 
   const activeSmartFolder = useMemo(() => {
@@ -453,11 +411,7 @@ const Entries = () => {
               type="text"
               value={searchText}
               onChange={handleTextChange}
-              placeholder={
-                searchMode === "semantic"
-                  ? "Describe what you're looking for (e.g. happy coding sessions)..."
-                  : "Search title, tags, mood, or entry content..."
-              }
+              placeholder="Search title, tags, mood, or entry content..."
               className="input w-full pl-11 pr-10 rounded-2xl bg-base-100 border-base-content/15 focus:border-primary/50 text-sm h-12"
             />
             {searchText && (
@@ -472,26 +426,6 @@ const Entries = () => {
           </div>
 
           <div className="flex gap-2 w-full md:w-auto shrink-0 justify-end">
-            {/* Search Mode Toggle */}
-            <div className="join border border-base-content/10 rounded-2xl p-0.5 bg-base-100">
-              <button
-                onClick={() => handleModeToggle("classic")}
-                className={`btn btn-xs sm:btn-sm rounded-xl join-item border-none text-[11px] sm:text-xs font-semibold px-3 ${
-                  searchMode === "classic" ? "btn-primary shadow-sm" : "btn-ghost text-base-content/50"
-                }`}
-              >
-                Classic
-              </button>
-              <button
-                onClick={() => handleModeToggle("semantic")}
-                className={`btn btn-xs sm:btn-sm rounded-xl join-item border-none text-[11px] sm:text-xs font-semibold gap-1 px-3 ${
-                  searchMode === "semantic" ? "btn-secondary text-secondary-content shadow-sm" : "btn-ghost text-base-content/50"
-                }`}
-              >
-                <FaRobot className="text-[10px]" /> AI Search
-              </button>
-            </div>
-
             {/* Save Current Search Button */}
             <button
               onClick={() => {
@@ -516,13 +450,6 @@ const Entries = () => {
             </button>
           </div>
         </div>
-
-        {/* AI Searching Loader */}
-        {searchMode === "semantic" && isSemanticSearching && (
-          <div className="flex items-center gap-2 justify-center py-2 text-sm text-secondary font-medium animate-pulse">
-            <span className="loading loading-ring loading-md" /> Searching entries with AI semantic relevance...
-          </div>
-        )}
 
         {/* Collapsible Advanced Filters */}
         {(isFiltersExpanded || mood || dateFrom || dateTo || selectedTags.length > 0 || pinned) && (
@@ -622,7 +549,6 @@ const Entries = () => {
           dateTo={dateTo}
           tags={selectedTags}
           pinned={pinned}
-          searchMode={searchMode}
           onClear={handleClearFilters}
         />
       )}
