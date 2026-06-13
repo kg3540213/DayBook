@@ -3,9 +3,10 @@ import NavLinks from "./NavLinks";
 import ThemeController from "../ThemeController";
 import NavProfile from "./NavProfile";
 import SearchBox from "./SearchBox";
+import { FaFolder } from "react-icons/fa";
 import logo from "../../assets/logo.svg";
 
-const Navbar = () => {
+const Navbar = ({ toggle }) => {
   return (
     <div className="navbar bg-base-300 w-full sticky top-0 z-10">
       <div className="navbar-start">
@@ -46,6 +47,14 @@ const Navbar = () => {
         <div className="hidden md:flex">
           <SearchBox />
         </div>
+        <button
+          type="button"
+          onClick={toggle}
+          className="btn btn-ghost btn-square"
+          title="Open smart folder sidebar"
+        >
+          <FaFolder />
+        </button>
         <ThemeController />
         <NavProfile />
       </div>

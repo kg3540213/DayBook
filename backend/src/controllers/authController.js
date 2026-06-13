@@ -1,14 +1,3 @@
-// backend/src/controllers/authController.js
-//
-// Option A: Password-based encryption — no dataKey, no encryptedDataKey.
-//
-// Auth model:
-//   - POST /login        → issues access token (15 min)
-//   - POST /logout       → clears auth cookie
-//   - PUT  /change-password → clears session key (client-side), issues new token
-//
-// Everything else (signup, OTP, etc.) is unchanged from the original.
-
 const User      = require("../models/userModel");
 const bcrypt    = require("bcryptjs");
 const validator = require("validator");
@@ -17,18 +6,19 @@ const generateToken = require("../utils/generateToken");
 const { sendOtpEmail } = require("../services/EmailService");
 const crypto    = require("crypto");
 
-// ── OTP helper ────────────────────────────────────────────────────
+// ── OTP helper 
 const generateOtp = () => crypto.randomInt(100000, 999999).toString();
 
-// ── cookie clearing helper ────────────────────────────────────────
+// ── cookie clearing helper 
 const clearAuthCookies = (res) => {
   const isProduction = process.env.NODE_ENV === "production";
   const base = {
     httpOnly: true,
     secure:   isProduction,
     sameSite: isProduction ? "None" : "Lax",
+    path:     "/",
   };
-  res.cookie("token", "", { ...base, expires: new Date(0) });
+  res.cookie("token", "", { ...base, maxAge: 0, expires: new Date(0) });
 };
 
 // ── SIGNUP ────────────────────────────────────────────────────────

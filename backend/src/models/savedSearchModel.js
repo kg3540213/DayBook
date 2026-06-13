@@ -36,7 +36,7 @@ const savedSearchSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Ensure a user cannot have two folders with the same name
+
 savedSearchSchema.index({ createdBy: 1, name: 1 }, { unique: true });
 
 const SavedSearch = mongoose.model("SavedSearch", savedSearchSchema);

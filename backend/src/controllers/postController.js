@@ -1,7 +1,7 @@
 const Post = require("../models/postModel");
 const redis = require("../config/redis");
 
-// ── Helper: Calculate next midnight ──
+// ── Helper: Calculate next midnight ────────
 const getNextMidnight = () => {
   const tomorrow = new Date();
   tomorrow.setDate(tomorrow.getDate() + 1);

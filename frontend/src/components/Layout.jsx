@@ -67,7 +67,7 @@ const Layout = () => {
   }
 
   return (
-    <div className="drawer">
+    <div className="drawer drawer-mobile">
       <input
         id="my-drawer-3"
         type="checkbox"
@@ -76,7 +76,7 @@ const Layout = () => {
         onChange={toggle}
       />
       <div className="drawer-content">
-        <Navbar />
+        <Navbar toggle={toggle} />
         <Outlet />
         <Footer />
       </div>

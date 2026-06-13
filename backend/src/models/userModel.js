@@ -1,8 +1,3 @@
-// backend/src/models/userModel.js
-//
-// Option A change: encryptedDataKey field removed.
-// Encryption key is derived client-side from the password — never stored server-side.
-
 const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema({

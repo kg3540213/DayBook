@@ -4,11 +4,9 @@ import { useSelector } from "react-redux";
 import { Navigate, useSearchParams, useNavigate } from "react-router-dom";
 import {
   useGetEntriesQuery,
-  useGetSavedSearchesQuery,
   useSaveSavedSearchMutation,
 } from "../redux/api/entriesApiSlice";
 import EntryCard from "../components/entry/EntryCard";
-import SmartFolder from "../components/entry/SmartFolder";
 import AddEntry from "../components/entry/AddEntry";
 import Loader from "../components/Loader";
 import { decryptText } from "../utils/crypto";
@@ -20,7 +18,6 @@ import {
   FaFilter,
   FaChevronDown,
   FaChevronUp,
-  FaFolder,
 } from "react-icons/fa";
 import { toast } from "react-toastify";
 
@@ -97,9 +94,6 @@ const Entries = () => {
   // API Data
   const { data: allEntriesData, isLoading } = useGetEntriesQuery();
   const allEntries = allEntriesData?.data ?? [];
-
-  const { data: savedSearchesData } = useGetSavedSearchesQuery();
-  const savedSearches = savedSearchesData?.data ?? [];
 
   const [saveSavedSearch, { isLoading: savingSearch }] = useSaveSavedSearchMutation();
 
@@ -222,26 +216,6 @@ const Entries = () => {
     navigate("/entries");
   };
 
-  const handleApplyFolder = (folder) => {
-    setSearchText(folder.searchText || "");
-    setMood(folder.mood || "");
-    setDateFrom(folder.dateFrom || "");
-    setDateTo(folder.dateTo || "");
-    setSelectedTags(folder.tags || []);
-    setPinned(false);
-
-    const params = new URLSearchParams();
-    if (folder.searchText) params.set("search", folder.searchText);
-    if (folder.mood) params.set("mood", folder.mood);
-    if (folder.dateFrom) params.set("dateFrom", folder.dateFrom);
-    if (folder.dateTo) params.set("dateTo", folder.dateTo);
-    if (folder.tags && folder.tags.length > 0) params.set("tags", folder.tags.join(","));
-    params.set("page", "1");
-
-    setSearchParams(params);
-    toast.info(`Smart Folder "${folder.name}" applied!`);
-  };
-
   const handleSaveSearchSubmit = async (e) => {
     e.preventDefault();
     if (!folderName.trim()) return;
@@ -356,17 +330,6 @@ const Entries = () => {
     pinned
   );
 
-  const activeSmartFolder = useMemo(() => {
-    return savedSearches.find(
-      (folder) =>
-        folder.searchText === searchText.trim() &&
-        folder.mood === mood &&
-        folder.dateFrom === dateFrom &&
-        folder.dateTo === dateTo &&
-        JSON.stringify((folder.tags || []).sort()) === JSON.stringify([...selectedTags].sort())
-    );
-  }, [savedSearches, searchText, mood, dateFrom, dateTo, selectedTags]);
-
   if (isLoading) {
     return (
       <div className="flex justify-center items-center" style={{ minHeight: "calc(100dvh - 64px - 52px)" }}>
@@ -380,26 +343,6 @@ const Entries = () => {
       <div className="fixed bottom-20 right-8 z-10">
         <AddEntry />
       </div>
-
-      {/* Smart Folders Section */}
-      {savedSearches.length > 0 && (
-        <div className="mt-6 mb-2">
-          <div className="flex items-center gap-2 mb-3">
-            <FaFolder className="text-primary text-base" />
-            <h2 className="font-bold text-sm tracking-wide text-base-content/80 uppercase">Smart Folders</h2>
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-            {savedSearches.map((folder) => (
-              <SmartFolder
-                key={folder._id}
-                folder={folder}
-                onSelect={handleApplyFolder}
-                active={activeSmartFolder?._id === folder._id}
-              />
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Modern Search Control Panel */}
       <div className="bg-base-200/40 border border-base-content/10 shadow-sm rounded-3xl p-5 mt-6 mb-6 flex flex-col gap-4">
