@@ -7,7 +7,8 @@ cloudinary.config({
   secure:     true,
 });
 
-// Validate config on startup so missing env vars are caught early
+
+
 if (
   !process.env.CLOUDINARY_CLOUD_NAME ||
   !process.env.CLOUDINARY_API_KEY    ||
