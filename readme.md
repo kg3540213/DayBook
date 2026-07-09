@@ -3,7 +3,6 @@
 DayBook is a privacy-aware journaling platform built with a Node/Express backend and a React + Vite frontend. It combines private journaling, smart search tools, AI-assisted mood support, and a public campus-style feed in one app.
 
 This README is written to explain how the system works step by step, so anyone reading it can understand the full flow of the project without needing to inspect every file.
-
 ---
 
 ## 1. What this project is

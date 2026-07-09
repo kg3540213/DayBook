@@ -76,7 +76,7 @@ const verifyEmailConfig = async () => {
     console.log("============================");
 
     if (!smtpHost || !smtpUser || !smtpPass || !fromEmail) {
-      console.warn("⚠️  Email credentials not fully configured. Email sending will fail.");
+      console.warn("Email credentials not fully configured. Email sending will fail.");
       console.warn("Required: SMTP_HOST, SMTP_USER, SMTP_PASS, EMAIL_USER");
       return false;
     }

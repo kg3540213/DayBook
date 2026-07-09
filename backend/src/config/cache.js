@@ -3,8 +3,7 @@ const redis = require("./redis");
 const ENTRY_TTL     = 5  * 60; // 5 min  — entry list pages
 const ANALYTICS_TTL = 10 * 60; // 10 min — aggregation results
 
-// ── get ───────────────────────────────────────────────────────────
-// Returns the parsed JSON value for key, or null on cache miss/error.
+
 const get = async (key) => {
   try {
     const raw = await redis.get(key);
@@ -16,8 +15,7 @@ const get = async (key) => {
   }
 };
 
-// ── set ───────────────────────────────────────────────────────────
-// Serialises value as JSON and stores it with an EX (seconds) TTL.
+
 const set = async (key, value, ttlSeconds = ENTRY_TTL) => {
   try {
     await redis.set(key, JSON.stringify(value), "EX", ttlSeconds);
@@ -35,9 +33,7 @@ const del = async (key) => {
   }
 };
 
-// ── invalidateUser ────────────────────────────────────────────────
-// Deletes ALL cache keys for a user using SCAN (non-blocking).
-// Called after every write operation so the next read hits the DB.
+
 const invalidateUser = async (userId) => {
   const pattern = `cache:user:${userId}:*`;
   try {
@@ -54,8 +50,7 @@ const invalidateUser = async (userId) => {
   }
 };
 
-// ── key builders ──────────────────────────────────────────────────
-// Centralised so every call-site spells the key the same way.
+
 const keys = {
   entries:  (userId, page, limit)  => `cache:user:${userId}:entries:${page}:${limit}`,
   mood:     (userId)               => `cache:user:${userId}:analytics:mood`,

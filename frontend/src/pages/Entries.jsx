@@ -8,6 +8,7 @@ import {
 } from "../redux/api/entriesApiSlice";
 import EntryCard from "../components/entry/EntryCard";
 import AddEntry from "../components/entry/AddEntry";
+import DailyPromptCard from "../components/entry/DailyPromptCard";
 import Loader from "../components/Loader";
 import { decryptText } from "../utils/crypto";
 import {
@@ -343,6 +344,8 @@ const Entries = () => {
       <div className="fixed bottom-20 right-8 z-10">
         <AddEntry />
       </div>
+
+      <DailyPromptCard />
 
       {/* Modern Search Control Panel */}
       <div className="bg-base-200/40 border border-base-content/10 shadow-sm rounded-3xl p-5 mt-6 mb-6 flex flex-col gap-4">

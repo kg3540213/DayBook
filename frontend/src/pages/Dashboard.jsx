@@ -107,9 +107,31 @@ const Dashboard = () => {
   // ── Streak ──────────────────────────────────────────────────────
   const streak = streakData?.data ?? { currentStreak: 0, longestStreak: 0, totalDays: 0 };
 
-  // ── Mood pie ────────────────────────────────────────────────────
+  // ── Weekly insight summary ───────────────────────────────────
   const moodAnalytics = moodData?.data?.analytics ?? {};
   const moodTotal     = moodData?.data?.total ?? 0;
+  const weeklyChartData = weeklyData?.data ?? [];
+  const dominantMoodEntry = Object.entries(moodAnalytics)
+    .filter(([, count]) => count > 0)
+    .sort((a, b) => b[1] - a[1])[0];
+  const dominantMood = dominantMoodEntry?.[0] ?? null;
+  const dominantMoodLabel = MOOD_META.find((m) => m.key === dominantMood)?.label ?? "No mood yet";
+  const weeklyEntries = weeklyChartData.reduce((sum, item) => sum + (item.count || 0), 0);
+  const recentWeeks = weeklyChartData.slice(-2);
+  const weekDelta = recentWeeks.length === 2
+    ? recentWeeks[1].count - recentWeeks[0].count
+    : 0;
+  const trendLabel = weekDelta > 0
+    ? `up ${weekDelta} entry${weekDelta === 1 ? "" : "s"} from the previous week`
+    : weekDelta < 0
+      ? `down ${Math.abs(weekDelta)} entry${Math.abs(weekDelta) === 1 ? "" : "s"} from the previous week`
+      : "steady compared with the previous week";
+
+  const insightText = streak.currentStreak > 0
+    ? `You are on a ${streak.currentStreak}-day streak and have written ${weeklyEntries} entries recently. ${dominantMood ? `Your most common mood is ${dominantMoodLabel.toLowerCase()}, and your rhythm is ${trendLabel}.` : "Your entries are still building momentum."}`
+    : `You have not started a streak yet. ${weeklyEntries > 0 ? `You’ve already logged ${weeklyEntries} entries recently.` : "Start with one small entry to build momentum."}`;
+
+  // ── Mood pie ────────────────────────────────────────────────────
   const pieData = MOOD_META
     .map(({ key, label, color }) => ({
       name: `${key} ${label}`,
@@ -117,9 +139,6 @@ const Dashboard = () => {
       color,
     }))
     .filter((d) => d.value > 0);
-
-  // ── Weekly bar ──────────────────────────────────────────────────
-  const weeklyChartData = weeklyData?.data ?? [];
 
   // ── Monthly line ────────────────────────────────────────────────
   const monthlyChartData = monthlyData?.data ?? [];
@@ -154,6 +173,32 @@ const Dashboard = () => {
           />
         </div>
       )}
+
+      {/* ── Weekly insight summary ───────────────────────────── */}
+      <div className="mb-8 rounded-3xl border border-primary/15 bg-gradient-to-br from-primary/10 via-base-200 to-base-100 p-5 shadow-sm">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="flex-1">
+            <p className="text-sm font-semibold uppercase tracking-[0.2em] text-primary/80">Weekly insight</p>
+            <h3 className="mt-2 text-xl font-semibold">Your reflection snapshot</h3>
+            <p className="mt-2 text-sm text-base-content/70">{insightText}</p>
+          </div>
+
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div className="rounded-2xl bg-base-100/80 px-3 py-2 text-sm">
+              <p className="text-base-content/50">Current streak</p>
+              <p className="font-semibold text-primary">{streak.currentStreak} days</p>
+            </div>
+            <div className="rounded-2xl bg-base-100/80 px-3 py-2 text-sm">
+              <p className="text-base-content/50">This week</p>
+              <p className="font-semibold text-primary">{weeklyEntries} entries</p>
+            </div>
+            <div className="rounded-2xl bg-base-100/80 px-3 py-2 text-sm">
+              <p className="text-base-content/50">Top mood</p>
+              <p className="font-semibold text-primary">{dominantMoodLabel}</p>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* ── Mood distribution ─────────────────────────────────── */}
       {moodError ? (
